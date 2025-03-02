@@ -1,0 +1,17 @@
+{
+  "itemIdWhitelist": [
+    4839,
+    9377
+  ],
+  "itemWhitelist": [
+    "aluminum plate",
+    "steel plate"
+  ],
+  "taxPercent": 0.1,
+  "taxFee": 15,
+  "null": null,
+  "object": {
+    "a": "b",
+    "c": "d"
+  }
+}
