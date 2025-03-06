@@ -1,8 +1,5 @@
--- services
 -- local HttpService = game:GetService("HttpService")
--- modules
 local Utility = require("./Utility")
--- globals
 local URL = Utility.GetServerAddress()
 
 

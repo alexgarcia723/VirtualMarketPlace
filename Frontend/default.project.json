@@ -33,9 +33,7 @@
 
     "StarterPlayer": {
       "StarterPlayerScripts": {
-        "Client": {
           "$path": "src/client"
-        }
       }
     },
 
