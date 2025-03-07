@@ -6,6 +6,15 @@
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "GetOrdersPage": {
+          "$className": "RemoteFunction"
+        },
+        "PlaceOrder": {
+          "$className": "RemoteFunction"
+        }
       }
     },
 
