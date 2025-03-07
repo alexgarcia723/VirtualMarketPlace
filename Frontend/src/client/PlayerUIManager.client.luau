@@ -86,9 +86,19 @@ local function NextPage(viewType)
         buyViewPageNumber += 1
         buyViewPageLabel.Text = buyViewPageNumber
         UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemId, buyViewPageNumber, numberOfOrdersPerPage)
+
+        for i = 1, numberOfOrdersPerPage do
+            local orderLine = buyViewOrdersList[i]
+            orderLine.OrderButton.NumberLabel.Text = i + (buyViewPageNumber - 1)*numberOfOrdersPerPage
+        end
     elseif viewType == 2 then
         sellViewPageNumber += 1
         sellViewPageLabel.Text = sellViewPageNumber
+
+        for i = 1, numberOfOrdersPerPage do
+            local orderLine = sellViewOrdersList[i]
+            orderLine.OrderButton.NumberLabel.Text = i + (sellViewPageNumber - 1)*numberOfOrdersPerPage
+        end
         UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemId, sellViewPageNumber, numberOfOrdersPerPage)
     end
 end
@@ -97,10 +107,20 @@ local function PreviousPage(viewType)
     if viewType == 1 and buyViewPageNumber > 1 then
         buyViewPageNumber -= 1
         buyViewPageLabel.Text = buyViewPageNumber
+
+        for i = 1, numberOfOrdersPerPage do
+            local orderLine = buyViewOrdersList[i]
+            orderLine.OrderButton.NumberLabel.Text = i + (buyViewPageNumber - 1)*numberOfOrdersPerPage
+        end
         UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemId, buyViewPageNumber, numberOfOrdersPerPage)
     elseif viewType == 2 and sellViewPageNumber > 1 then
         sellViewPageNumber -= 1
         sellViewPageLabel.Text = sellViewPageNumber
+
+        for i = 1, numberOfOrdersPerPage do
+            local orderLine = sellViewOrdersList[i]
+            orderLine.OrderButton.NumberLabel.Text = i + (sellViewPageNumber - 1)*numberOfOrdersPerPage
+        end
         UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemId, sellViewPageNumber, numberOfOrdersPerPage)
     end
 end
@@ -147,7 +167,7 @@ end
 local function DisplayOrderPlaceConfirmation()
     if OrderDetailsValid() then 
         orderConfirmationFrame.OrderItemLabel.Text = "Order Item: " .. selectedOrderItemId
-        orderConfirmationFrame.OrderTypeLabel.Text = "Order Type: " .. SharedUtility.TransactionTypeLookup[selectedTransactionType] .. " Order"
+        orderConfirmationFrame.OrderTypeLabel.Text = "Order Type: " .. SharedUtility.TransactionTypeLookup[selectedTransactionType]
         orderConfirmationFrame.OrderPriceLabel.Text = "Order Price: " .. priceTextbox.Text
         orderConfirmationFrame.OrderQuantityLabel.Text = "Order Quantity: " .. quantityTextbox.Text
         orderConfirmationFrame.Visible = true

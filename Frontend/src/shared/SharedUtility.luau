@@ -8,8 +8,8 @@ SharedUtility.TransactionType = {
 }
 
 SharedUtility.TransactionTypeLookup = {
-    [0] = "BuyOrder",
-	[1] = "SellOrder",
+    [0] = "Buy Order",
+	[1] = "Sell Order",
 	[2] = "Buy",
 	[3] = "Sell"
 }
