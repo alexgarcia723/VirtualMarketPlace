@@ -5,6 +5,8 @@ SharedUtility = require(ReplicatedStorage.Shared.SharedUtility)
 local serverAddress = "http://localhost:8080"
 local endpoints = {
     placeOrder = "/api/v1/placeOrder",
+    fillLimitOrder = "/api/v1/fillLimitOrder",
+    fillMarketOrder = "/api/v1/fillMarketOrder",
     getPage = "/api/v1/getPage/"
 }
 
@@ -18,12 +20,13 @@ end
 
 function Utility.AddExampleTransaction()
     local transactionDetails = {
-        transactionType = SharedUtility.GetRandomTransactionType(),
-        itemId = "Orange",
+        transactionType = SharedUtility.TransactionType.BuyOrder,
+        itemType = "Apple",
+        -- itemType = "Orange",
         originalQuantity = 50,
-        remaningQuantity = 17,
-        price = 49.99,
-        ownerId = "John Doe",
+        price = 149.99,
+        ownerId = 99999,
+        ownerName = "ExampleOwnerName"
     }
 
     local response = HttpService:RequestAsync({
@@ -45,11 +48,11 @@ function Utility.PlaceOrder(player, transactionDetails)
         return false
     end
     
-    price = math.floor(unformattedPrice * 100 + 0.5)/100
-    quantity = math.floor(unformattedQuantity+ 0.5)
+    local price = math.floor(unformattedPrice * 100 + 0.5)/100
+    local quantity = math.floor(unformattedQuantity + 0.5)
 
     -- validate price and quantity
-    if price < 0 or quantity < 0 then
+    if price <= 0 or quantity <= 0 then
         return false
     end
 
@@ -59,20 +62,21 @@ function Utility.PlaceOrder(player, transactionDetails)
         return false
     end
 
-    -- validate itemId
-    local itemId = transactionDetails.itemId
-    if not itemId then
+    -- validate itemType
+    local itemType = transactionDetails.itemType
+    if not itemType then
         return false
     end
 
     local validatedTransactionDetails = {
         transactionType = transactionType,
-        itemId = itemId,
+        itemType = itemType,
         originalQuantity = quantity,
         remainingQuantity = quantity,
         price = price,
-        ownerId = "NameOfMerchant"
-        -- ownerId = player.Name
+        ownerId = player.UserId,
+        ownerName = "NameOfMerchant"
+        -- ownerName = player.Name
     }
 
     local response = HttpService:RequestAsync({
@@ -87,9 +91,41 @@ function Utility.PlaceOrder(player, transactionDetails)
     return response
 end
 
-function Utility.GetOrdersPageFromServer(player, transactionType, itemId, pageNum)
+function Utility.FillOrder(player, transactionId, desiredQuantity)
+    local ownerId = player.UserId
+    local unformattedQuantity = tonumber(desiredQuantity)
+    if (not unformattedQuantity) then
+        return false
+    end
+    
+    local quantity = math.floor(unformattedQuantity + 0.5)
+
+    -- validate quantity
+    if quantity <= 0 then
+        return false
+    end
+
+    local validatedOrderDetails = {
+        otherTransactionId = tostring(transactionId),
+        ownerId = tostring(ownerId),
+        desiredQuantity = tostring(desiredQuantity)
+    }
+
     local response = HttpService:RequestAsync({
-		Url = serverAddress..endpoints["getPage"] .. itemId .. "?transactionType=" .. transactionType .. "&pageNum=" .. pageNum,
+		Url = serverAddress..endpoints["fillLimitOrder"],
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/json",
+		},
+        Body = HttpService:JSONEncode(validatedOrderDetails)
+	})
+
+    return response
+end
+
+function Utility.GetOrdersPageFromServer(player, transactionType, itemType, pageNum)
+    local response = HttpService:RequestAsync({
+		Url = serverAddress..endpoints["getPage"] .. itemType .. "?transactionType=" .. transactionType .. "&pageNum=" .. pageNum,
 		Method = "GET",
 		Headers = {
 			["Content-Type"] = "application/json",
@@ -99,5 +135,40 @@ function Utility.GetOrdersPageFromServer(player, transactionType, itemId, pageNu
     return HttpService:JSONDecode(response.Body)
 end
 
+function Utility.MarketFillOrder(player, itemType, transactionType, desiredQuantity, partialFill)
+    -- int itemTypeIndex, int transactonTypeIndex, int desiredQuantity, int ownerId, double availableFunds, boolean partialFill) {
+    local ownerId = player.UserId
+    local unformattedQuantity = tonumber(desiredQuantity)
+    if (not unformattedQuantity) then
+        return false
+    end
+    
+    local quantity = math.floor(unformattedQuantity + 0.5)
+
+    -- validate quantity
+    if quantity <= 0 then
+        return false
+    end
+
+    local validatedOrderDetails = {
+        ownerId = tostring(ownerId),
+        desiredQuantity = tostring(desiredQuantity),
+        itemType = tostring(itemType),
+        transactionType = tostring(transactionType),
+        availableFunds = tostring(20.0),
+        partialFill = partialFill and "true" or "false"
+    }
+
+    local response = HttpService:RequestAsync({
+		Url = serverAddress..endpoints["fillMarketOrder"],
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/json",
+		},
+        Body = HttpService:JSONEncode(validatedOrderDetails)
+	})
+
+    return response
+end
 
 return Utility

@@ -14,6 +14,12 @@
         },
         "PlaceOrder": {
           "$className": "RemoteFunction"
+        },
+        "FillOrder": {
+          "$className": "RemoteFunction"
+        },
+        "MarketFillOrder": {
+          "$className": "RemoteFunction"
         }
       }
     },
