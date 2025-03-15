@@ -1,32 +1,34 @@
 package com.example.demo;
 
-import java.util.Optional;
-import java.util.Random;
 import java.util.UUID;
-
-import org.springframework.data.repository.Repository;
-
 import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
-import jakarta.persistence.Table;
+
 
 @MappedSuperclass
 public abstract class Transaction {
 
 	protected TransactionType transactionType;
-	protected String itemId; // should be String, enum or int?
+	protected ItemType itemType;
 	protected int originalQuantity;
 	protected int remainingQuantity;
 	protected double price;
-	protected String ownerId;
+	protected int ownerId;
+	protected String ownerName;
 	@Id
-	protected UUID transactionId = UUID.randomUUID(); // can use auto-generated increments instead?
+	protected UUID transactionId = UUID.randomUUID();
 	
 	
+	@Column(name = "ownerName", nullable = true)
+	public String getOwnerName() {
+		return ownerName;
+	}
+
+	public void setOwnerName(String ownerName) {
+		this.ownerName = ownerName;
+	}
+
 	@Column(name = "transactionType", nullable = false)
 	public TransactionType getTransactionType() {
 		return transactionType;
@@ -36,13 +38,13 @@ public abstract class Transaction {
 		this.transactionType = transactionType;
 	}
 
-	@Column(name = "itemId", nullable = false)
-	public String getItemId() {
-		return itemId;
+	@Column(name = "itemType", nullable = false)
+	public ItemType getItemType() {
+		return itemType;
 	}
 
-	public void setItemId(String itemId) {
-		this.itemId = itemId;
+	public void setItemType(ItemType itemType) {
+		this.itemType = itemType;
 	}
 
 	@Column(name = "originalQuantity", nullable = false)
@@ -73,12 +75,12 @@ public abstract class Transaction {
 	}
 
 	@Column(name = "ownerId", nullable = false)
-	public String getOwnerId() {
+	public int getOwnerId() {
 		return ownerId;
 	}
 
-	public void setOwnerId(String merchantId) {
-		this.ownerId = merchantId;
+	public void setOwnerId(int ownerId) {
+		this.ownerId = ownerId;
 	}
 
 	@Column(name = "transactionId", nullable = false)
