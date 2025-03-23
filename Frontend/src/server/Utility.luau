@@ -29,16 +29,19 @@ function Utility.AddExampleTransaction()
         ownerName = "ExampleOwnerName"
     }
 
-    local response = HttpService:RequestAsync({
-		Url = serverAddress..endpoints["placeOrder"],
-		Method = "POST",
-		Headers = {
-			["Content-Type"] = "application/json",
-		},
-		Body = HttpService:JSONEncode(transactionDetails)
-	})
-
-    return response
+    local response = nil
+    local success, statusMessage = pcall(function() 
+        response = HttpService:RequestAsync({
+            Url = serverAddress..endpoints["placeOrder"],
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+            },
+            Body = HttpService:JSONEncode(transactionDetails)
+        })  
+    end)
+    
+    return success and response or nil
 end
 
 function Utility.PlaceOrder(player, transactionDetails)
@@ -79,16 +82,19 @@ function Utility.PlaceOrder(player, transactionDetails)
         -- ownerName = player.Name
     }
 
-    local response = HttpService:RequestAsync({
-		Url = serverAddress..endpoints["placeOrder"],
-		Method = "POST",
-		Headers = {
-			["Content-Type"] = "application/json",
-		},
-		Body = HttpService:JSONEncode(validatedTransactionDetails)
-	})
+    local response = nil
+    local success, statusMessage = pcall(function() 
+        response = HttpService:RequestAsync({
+            Url = serverAddress..endpoints["placeOrder"],
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+            },
+            Body = HttpService:JSONEncode(validatedTransactionDetails)
+        })
+    end)
 
-    return response
+    return success and response or nil
 end
 
 function Utility.FillOrder(player, transactionId, desiredQuantity)
@@ -111,28 +117,34 @@ function Utility.FillOrder(player, transactionId, desiredQuantity)
         desiredQuantity = tostring(desiredQuantity)
     }
 
-    local response = HttpService:RequestAsync({
-		Url = serverAddress..endpoints["fillLimitOrder"],
-		Method = "POST",
-		Headers = {
-			["Content-Type"] = "application/json",
-		},
-        Body = HttpService:JSONEncode(validatedOrderDetails)
-	})
+    local response = nil
+    local success, statusMessage = pcall(function() 
+        response = HttpService:RequestAsync({
+            Url = serverAddress..endpoints["fillLimitOrder"],
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+            },
+            Body = HttpService:JSONEncode(validatedOrderDetails)
+        })
+    end)
 
-    return response
+    return success and response or nil
 end
 
 function Utility.GetOrdersPageFromServer(player, transactionType, itemType, pageNum)
-    local response = HttpService:RequestAsync({
-		Url = serverAddress..endpoints["getPage"] .. itemType .. "?transactionType=" .. transactionType .. "&pageNum=" .. pageNum,
-		Method = "GET",
-		Headers = {
-			["Content-Type"] = "application/json",
-		}
-	})
-
-    return HttpService:JSONDecode(response.Body)
+    local response = nil
+    local success, statusMessage = pcall(function() 
+        response = HttpService:RequestAsync({
+            Url = serverAddress..endpoints["getPage"] .. itemType .. "?transactionType=" .. transactionType .. "&pageNum=" .. pageNum,
+            Method = "GET",
+            Headers = {
+                ["Content-Type"] = "application/json",
+            }
+	    })
+    end)
+    
+    return success and HttpService:JSONDecode(response.Body) or nil
 end
 
 function Utility.MarketFillOrder(player, itemType, transactionType, desiredQuantity, partialFill)
@@ -159,16 +171,19 @@ function Utility.MarketFillOrder(player, itemType, transactionType, desiredQuant
         partialFill = partialFill and "true" or "false"
     }
 
-    local response = HttpService:RequestAsync({
-		Url = serverAddress..endpoints["fillMarketOrder"],
-		Method = "POST",
-		Headers = {
-			["Content-Type"] = "application/json",
-		},
-        Body = HttpService:JSONEncode(validatedOrderDetails)
-	})
-
-    return response
+    local response = nil
+    local success, statusMessage = pcall(function() 
+        response = HttpService:RequestAsync({
+            Url = serverAddress..endpoints["fillMarketOrder"],
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+            },
+            Body = HttpService:JSONEncode(validatedOrderDetails)
+        })    
+    end)
+    
+    return success and response or nil
 end
 
 return Utility

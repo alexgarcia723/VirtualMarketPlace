@@ -1,4 +1,5 @@
 local SharedUtility = {}
+local ErrorMessageUI = game
 
 -- All these "Enums" should instead be generated from an HTTP request from the server.
 SharedUtility.TransactionType = {
@@ -17,10 +18,10 @@ SharedUtility.TransactionTypeLookup = {
 
 SharedUtility.ItemTypeIcons = {
 	Apple = "http://www.roblox.com/asset/?id=7892919616",
-	Banana = "",
-	Orange = "",
-	Grape = "",
-	Watermelon = ""
+	Banana = "http://www.roblox.com/asset/?id=14334702049",
+	Orange = "http://www.roblox.com/asset/?id=16098324319",
+	Grape = "http://www.roblox.com/asset/?id=16098329149",
+	Watermelon = "http://www.roblox.com/asset/?id=16098274639"
 }
 
 SharedUtility.ItemType = {
@@ -38,6 +39,13 @@ SharedUtility.ItemTypeLookup = {
 	[3] = "Grape",
 	[4] = "Watermelon",
 }
+
+function SharedUtility.DisplayErrorMessage(message, errorLabel)
+	errorLabel.Text = message
+	errorLabel.Parent.Visible = true 
+	task.wait(3)
+	errorLabel.Parent.Visible = false 
+end
 
 function SharedUtility.GetRandomTransactionType()
     return Random.new():NextInteger(0, #SharedUtility.TransactionType)

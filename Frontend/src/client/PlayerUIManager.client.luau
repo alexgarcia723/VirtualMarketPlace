@@ -1,3 +1,4 @@
+-- TODO: fix the SelectedOrderItemBackground aspect ratio when resizing
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SharedUtility = require(ReplicatedStorage.Shared.SharedUtility)
@@ -12,6 +13,8 @@ local marketplaceUI = player.PlayerGui:WaitForChild("MarketplaceUI")
 
 -- UI container frames
 local mainPane = marketplaceUI:FindFirstChild("MainPane")
+local errorFrame = marketplaceUI:FindFirstChild("ErrorFrame")
+local errorLabel = errorFrame:FindFirstChild("ErrorLabel")
 
 local buyView = mainPane:FindFirstChild("BuyView")
 local sellView = mainPane:FindFirstChild("SellView")
@@ -19,8 +22,16 @@ local sellView = mainPane:FindFirstChild("SellView")
 local buyViewOrdersList = buyView:FindFirstChild("OrdersListScrollFrame")
 local sellViewOrdersList = sellView:FindFirstChild("OrdersListScrollFrame")
 
+local orderItemSelectionFrame = mainPane:FindFirstChild("SelectedOrderItemBackground")
+local orderDetailsFrame = mainPane:FindFirstChild("OrderInfoBackground")
+local itemViewPane = mainPane:FindFirstChild("ItemView")
+local itemViewItemIcon = itemViewPane:FindFirstChild("SelectedItemIcon")
+local itemSelectFrame = marketplaceUI:FindFirstChild("MainPaneItemSelect")
+local itemSelectListFrame = itemSelectFrame:FindFirstChild("ItemListScrollFrame")
+
 local buyOrderTemplate = buyView:FindFirstChild("TemplateOrderLine")
 local sellOrderTemplate = sellView:FindFirstChild("TemplateOrderLine")
+local selectItemTemplate = itemSelectFrame:FindFirstChild("TemplateOrderLine")
 
 local buyViewListHeader = buyView:FindFirstChild("ListHeader")
 local sellViewListHeader = sellView:FindFirstChild("ListHeader")
@@ -43,15 +54,15 @@ local fillOrderConfirmationFrame = marketplaceUI:FindFirstChild("FillOrderConfir
 local confirmFillOrderButton = fillOrderConfirmationFrame:FindFirstChild("ConfirmOrderButton")
 local cancelFillOrderButton = fillOrderConfirmationFrame:FindFirstChild("CancelOrderButton")
 
-local orderItemSelectionFrame = mainPane:FindFirstChild("SelectedOrderItemBackground")
-local orderDetailsFrame = mainPane:FindFirstChild("OrderInfoBackground")
-
 local placeOrderPriceTextbox = orderDetailsFrame:FindFirstChild("PriceTextbox")
 local placeOrderQuantityTextbox = orderDetailsFrame:FindFirstChild("QuantityTextbox")
 local placeOrderButton = orderDetailsFrame:FindFirstChild("PlaceOrderButton")
 local selectOrderItemButton = orderItemSelectionFrame:FindFirstChild("SelectOrderItemButton")
 local toggleBuyOrderButton = orderDetailsFrame:FindFirstChild("SelectBuyToggle")
 local toggleSellOrderButton = orderDetailsFrame:FindFirstChild("SelectSellToggle")
+
+local selectedItemIcon = orderItemSelectionFrame:FindFirstChild("SelectedItemIcon")
+local selectedItemLabel = orderItemSelectionFrame:FindFirstChild("SelectedItemLabel")
 
 local marketOrderBackground = mainPane:FindFirstChild("FilterBackground")
 local marketOrderQuantityTextbox = marketOrderBackground:FindFirstChild("QuantityTextBox")
@@ -67,7 +78,7 @@ local selectedOrderItemType = SharedUtility.ItemType.Apple
 local selectedTransactionType = nil
 local currentlyFocusedOrderLine = nil
 
-local function UpdateOrderList(orderType, itemType, pageNumber, numberOfOrdersPerPage)
+local function UpdateOrderList(orderType, itemType, pageNumber, numberOfOrdersPerPage) -- TODO: should this send combined HTTP request for sell AND buy orders?
     local resultList = getOrdersPage:InvokeServer(orderType, itemType, pageNumber)
     local ordersViewList
 
@@ -78,9 +89,10 @@ local function UpdateOrderList(orderType, itemType, pageNumber, numberOfOrdersPe
     end
 
     for i = 1, numberOfOrdersPerPage do
-        if resultList[i] then
+        local orderLine = ordersViewList[i]
+        orderLine.OrderButton.NumberLabel.Text = i + (buyViewPageNumber - 1) * numberOfOrdersPerPage
+        if resultList and resultList[i] then
             -- update order text with data from server
-            local orderLine = ordersViewList[i]
             orderLine.OwnerIdLabel.Text = resultList[i].ownerName and resultList[i].ownerName or "Anonymoose"
             orderLine.QuantityLabel.Text = resultList[i].remainingQuantity.."/"..resultList[i].originalQuantity
             orderLine.PriceLabel.Text = resultList[i].price
@@ -89,7 +101,6 @@ local function UpdateOrderList(orderType, itemType, pageNumber, numberOfOrdersPe
             orderLine:SetAttribute("RemainingQuantity", resultList[i].remainingQuantity)
         else
             -- set order text to be blank
-            local orderLine = ordersViewList[i] 
             orderLine.OwnerIdLabel.Text = "---"
             orderLine.QuantityLabel.Text = "---/---"
             orderLine.PriceLabel.Text = "$---"
@@ -105,19 +116,9 @@ local function NextPage(viewType)
         buyViewPageNumber += 1
         buyViewPageLabel.Text = buyViewPageNumber
         UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage)
-
-        for i = 1, numberOfOrdersPerPage do
-            local orderLine = buyViewOrdersList[i]
-            orderLine.OrderButton.NumberLabel.Text = i + (buyViewPageNumber - 1)*numberOfOrdersPerPage
-        end
     elseif viewType == 2 then
         sellViewPageNumber += 1
         sellViewPageLabel.Text = sellViewPageNumber
-
-        for i = 1, numberOfOrdersPerPage do
-            local orderLine = sellViewOrdersList[i]
-            orderLine.OrderButton.NumberLabel.Text = i + (sellViewPageNumber - 1)*numberOfOrdersPerPage
-        end
         UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage)
     end
 end
@@ -196,7 +197,6 @@ local function DisplayOrderPlaceConfirmation()
 end
 
 local function ConfirmPlaceOrder()
-
     if PlaceOrderDetailsValid() then
         local transactionDetails = {
             transactionType = selectedTransactionType,
@@ -209,6 +209,8 @@ local function ConfirmPlaceOrder()
         if placeOrderResult then
             UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage)
             UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage)
+        else 
+            -- display error message
         end
 
         placeOrderConfirmationFrame.Visible = false
@@ -223,11 +225,12 @@ local function DisplayOrderFillConfirmation(orderLine)
     local otherTransactionId = orderLine:GetAttribute("TransactionId")
     if otherTransactionId ~= nil then
         currentlyFocusedOrderLine = orderLine;
-        fillOrderConfirmationFrame.OrderItemLabel.Text = "Order Item: " .. selectedOrderItemType
+        fillOrderConfirmationFrame.OrderItemLabel.Text = "Order Item: " .. SharedUtility.ItemTypeLookup[selectedOrderItemType]
         fillOrderConfirmationFrame.OrderTypeLabel.Text = "Order Type: " .. SharedUtility.TransactionTypeLookup[orderLine:GetAttribute("TransactionType")]
         fillOrderConfirmationFrame.OrderPriceLabel.Text = "Order Price: " .. orderLine:GetAttribute("Price")
-        fillOrderConfirmationFrame.OrderQuantityLabel.PlaceholderText = "Quantity ..."
-        fillOrderConfirmationFrame.OrderQuantityLabel.Text = ""
+        fillOrderConfirmationFrame.QuantityFrame.OrderQuantitySelect.PlaceholderText = "Remaining quantity ..."
+        fillOrderConfirmationFrame.QuantityFrame.OrderQuantitySelect.Text = ""
+        fillOrderConfirmationFrame.QuantityFrame.RemainingQuantity.Text = "Available: " .. orderLine:GetAttribute("RemainingQuantity")
         fillOrderConfirmationFrame.Visible = true
     else
         currentlyFocusedOrderLine = nil
@@ -236,7 +239,7 @@ end
 
 local function ConfirmFillOrder()
     if currentlyFocusedOrderLine ~= nil then
-        local desiredQuantity = tonumber(fillOrderConfirmationFrame.OrderQuantityLabel.Text)
+        local desiredQuantity = tonumber(fillOrderConfirmationFrame.QuantityFrame.OrderQuantitySelect.Text)
         local transactionId = currentlyFocusedOrderLine:GetAttribute("TransactionId")
         local remainingQuantity = currentlyFocusedOrderLine:GetAttribute("RemainingQuantity")
 
@@ -246,13 +249,15 @@ local function ConfirmFillOrder()
                 if fillOrderResult then
                     UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage)
                     UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage)
+                else 
+                    -- display error message
                 end
                 
                 fillOrderConfirmationFrame.Visible = false
                 currentlyFocusedOrderLine = nil
             end
         else
-            -- display quantity out of range method
+            SharedUtility.DisplayErrorMessage("The requested quantity amount is invalid.", errorLabel)
         end
     end
 
@@ -268,8 +273,67 @@ local function PlaceMarketOrder(transactionType)
 
     if desiredQuantity ~= nil then
         local result = marketFillOrder:InvokeServer(viewingItemType, transactionType, desiredQuantity, false)
-        print(result)
+        if result then
+            print(result)
+        else
+            -- display error message
+        end
     end
+end
+
+local function UpdateItemSelection(itemName)
+    viewingItemType = SharedUtility.ItemType[itemName]
+    selectedOrderItemType = SharedUtility.ItemType[itemName]
+
+    selectedItemIcon.Image = SharedUtility.ItemTypeIcons[itemName]
+    itemViewItemIcon.Image = SharedUtility.ItemTypeIcons[itemName]
+    selectedItemLabel.Text = itemName
+
+    -- update page text
+    sellViewPageNumber = 1
+    buyViewPageNumber = 1
+    buyViewPageLabel.Text = buyViewPageNumber
+    sellViewPageLabel.Text = sellViewPageNumber
+    
+    itemSelectFrame.Visible = false
+    UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage) -- TODO: access cached item page instead of sending new HTTP request
+    UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage) -- TODO: access cached item page instead of sending new HTTP request
+end
+
+local function UpdateItemSelectPane()
+    for _, orderLine in ipairs(itemSelectListFrame:GetChildren()) do
+        if (not orderLine:IsA("UIListLayout")) then
+            local itemName = orderLine:GetAttribute("ItemName")
+            orderLine.PriceLabel.Text = 0 -- TODO: GET AVERAGE/MINIMUM PRICE FROM SERVER USING itemName
+            orderLine.QuantitySelect.QuantityLabel.Text = 0 -- TODO: GET NUMBERS OF ITEM FOR SALE FROM SERVER USING itemName
+        end
+    end
+end
+
+local function InitializeItemSelectPane()
+    for _, child in ipairs(itemSelectListFrame:GetChildren()) do
+        if not child:IsA("UIListLayout") then
+            child:Destroy()
+        end
+    end
+
+    for itemName, iconURL in pairs(SharedUtility.ItemTypeIcons) do
+        local orderLine = selectItemTemplate:Clone()
+        orderLine.ItemIconFrame.ItemIcon.Image = iconURL
+        orderLine.Name = itemName .. "Line"
+        orderLine.ItemName.Text = itemName
+        orderLine.Parent = itemSelectListFrame
+        orderLine:SetAttribute("ItemName", itemName)
+        orderLine.Visible = true
+        orderLine.QuantitySelect.SelectButton.MouseButton1Click:Connect(function() UpdateItemSelection(itemName) end)
+    end
+
+    UpdateItemSelectPane()
+    UpdateItemSelection(SharedUtility.ItemTypeLookup[viewingItemType])
+end
+
+local function DisplaySelectOrderItem() 
+    itemSelectFrame.Visible = true
 end
 
 local function InitializeUI()
@@ -293,26 +357,24 @@ local function InitializeUI()
     for i = 1, numberOfOrdersPerPage do
         local orderLine = buyOrderTemplate:Clone()
         orderLine.OrderButton.NumberLabel.Text = i
-        orderLine.Visible = true
         orderLine.Name = i
         orderLine.Parent = buyViewOrdersList
         orderLine:SetAttribute("TransactionType", SharedUtility.TransactionType.Sell)
+        orderLine.Visible = true
         orderLine.OrderButton.Execute.MouseButton1Click:Connect(function() DisplayOrderFillConfirmation(orderLine) end)
     end
 
     for i = 1, numberOfOrdersPerPage do
         local orderLine = sellOrderTemplate:Clone()
         orderLine.OrderButton.NumberLabel.Text = i
-        orderLine.Visible = true
         orderLine.Name = i
         orderLine.Parent = sellViewOrdersList
         orderLine:SetAttribute("TransactionType", SharedUtility.TransactionType.Buy)
+        orderLine.Visible = true
         orderLine.OrderButton.Execute.MouseButton1Click:Connect(function() DisplayOrderFillConfirmation(orderLine) end)
     end
 
-    -- get page from database and display it in our order list frames
-    UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage)
-    UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage)
+    InitializeItemSelectPane()
 end
 
 buyViewPrevPageButton.MouseButton1Click:Connect(function() PreviousPage(1) end)
@@ -328,5 +390,6 @@ cancelFillOrderButton.MouseButton1Click:Connect(CancelFillOrder)
 marketOrderBuyButton.MouseButton1Click:Connect(function() PlaceMarketOrder(SharedUtility.TransactionType.BuyOrder) end)
 marketOrderSellButton.MouseButton1Click:Connect(function() PlaceMarketOrder(SharedUtility.TransactionType.SellOrder) end)
 placeOrderButton.MouseButton1Click:Connect(DisplayOrderPlaceConfirmation)
+selectOrderItemButton.MouseButton1Click:Connect(DisplaySelectOrderItem)
 
 InitializeUI()
