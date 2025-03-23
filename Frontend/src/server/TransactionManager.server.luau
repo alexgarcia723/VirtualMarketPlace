@@ -1,7 +1,7 @@
 -- local HttpService = game:GetService("HttpService")
+-- TODO: when player A buys from player B, we must update player B's datastores
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Utility = require("./Utility")
-local SharedUtility = require(ReplicatedStorage.Shared.SharedUtility)
 
 local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
 local getOrdersPage = remotesFolder:FindFirstChild("GetOrdersPage")
@@ -22,5 +22,8 @@ marketFillOrder.OnServerInvoke = Utility.MarketFillOrder
 -- test code
 -- print(Utility.AddExampleTransaction())
 -- test code
+
+-- TODO: loop to periodically update item price histories
+-- TODO: loop to peredically get average and mininum item prices
 
 print("Hello world, from server!")

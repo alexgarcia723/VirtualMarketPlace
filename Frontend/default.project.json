@@ -20,6 +20,9 @@
         },
         "MarketFillOrder": {
           "$className": "RemoteFunction"
+        }, 
+        "PlayerDataUpdate": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -43,6 +46,8 @@
     "StarterGui": {
       "MarketplaceUI": {
         "$path": "src/assets/MarketplaceUI.rbxm"
+      }, "CurrencyUI": {
+        "$path": "src/assets/CurrencyUI.rbxm"
       }
     },
 

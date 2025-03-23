@@ -1,6 +1,7 @@
 -- TODO: fix the SelectedOrderItemBackground aspect ratio when resizing
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 local SharedUtility = require(ReplicatedStorage.Shared.SharedUtility)
 
 local player = Players.LocalPlayer
@@ -73,10 +74,13 @@ local marketOrderSellButton = marketOrderBackground:FindFirstChild("SellButton")
 local numberOfOrdersPerPage = math.floor(1 / buyOrderTemplate.Size.Y.Scale + 0.5)
 local sellViewPageNumber = 1
 local buyViewPageNumber = 1
-local viewingItemType = SharedUtility.ItemType.Apple
+local viewingItemType = SharedUtility.ItemType.Apple -- TODO: i think we can combine viewingItemType and selectedOrderItemType
 local selectedOrderItemType = SharedUtility.ItemType.Apple
 local selectedTransactionType = nil
 local currentlyFocusedOrderLine = nil
+local UnselectedColor = Color3.fromRGB(60, 118, 193)
+local SelectedColor = Color3.fromRGB(79, 158, 255)
+
 
 local function UpdateOrderList(orderType, itemType, pageNumber, numberOfOrdersPerPage) -- TODO: should this send combined HTTP request for sell AND buy orders?
     local resultList = getOrdersPage:InvokeServer(orderType, itemType, pageNumber)
@@ -147,22 +151,28 @@ end
 
 local function SetOrderBuySelection()
     if selectedTransactionType == SharedUtility.TransactionType.BuyOrder then
-        toggleBuyOrderButton.BorderSizePixel = 0
+        toggleBuyOrderButton.BackgroundColor3 = UnselectedColor
+        -- toggleBuyOrderButton.BorderSizePixel = 0
         selectedTransactionType = nil
     else
-        toggleBuyOrderButton.BorderSizePixel = 5
-        toggleSellOrderButton.BorderSizePixel = 0
+        -- toggleBuyOrderButton.BorderSizePixel = 5
+        toggleBuyOrderButton.BackgroundColor3 = SelectedColor
+        -- toggleSellOrderButton.BorderSizePixel = 0
+        toggleSellOrderButton.BackgroundColor3 = UnselectedColor
         selectedTransactionType = SharedUtility.TransactionType.BuyOrder
     end
 end
 
 local function SetOrderSellSelection()
     if selectedTransactionType == SharedUtility.TransactionType.SellOrder then
-        toggleSellOrderButton.BorderSizePixel = 0
+        -- toggleSellOrderButton.BorderSizePixel = 0
+        toggleSellOrderButton.BackgroundColor3 = UnselectedColor
         selectedTransactionType = nil
     else
-        toggleSellOrderButton.BorderSizePixel = 5
-        toggleBuyOrderButton.BorderSizePixel = 0
+        -- toggleSellOrderButton.BorderSizePixel = 5
+        toggleSellOrderButton.BackgroundColor3 = SelectedColor
+        -- toggleBuyOrderButton.BorderSizePixel = 0
+        toggleBuyOrderButton.BackgroundColor3 = UnselectedColor
         selectedTransactionType = SharedUtility.TransactionType.SellOrder
     end
 end
@@ -206,11 +216,11 @@ local function ConfirmPlaceOrder()
         }
 
         local placeOrderResult = placeOrder:InvokeServer(transactionDetails)
-        if placeOrderResult then
+        if placeOrderResult.statusCode ~= -1 then
             UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage)
             UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage)
         else 
-            -- display error message
+            task.spawn(SharedUtility.DisplayErrorMessage, placeOrderResult.message, errorLabel)
         end
 
         placeOrderConfirmationFrame.Visible = false
@@ -242,15 +252,17 @@ local function ConfirmFillOrder()
         local desiredQuantity = tonumber(fillOrderConfirmationFrame.QuantityFrame.OrderQuantitySelect.Text)
         local transactionId = currentlyFocusedOrderLine:GetAttribute("TransactionId")
         local remainingQuantity = currentlyFocusedOrderLine:GetAttribute("RemainingQuantity")
+        local price = currentlyFocusedOrderLine:GetAttribute("Price")
+        local transactionType = currentlyFocusedOrderLine:GetAttribute("TransactionType")
 
         if desiredQuantity and desiredQuantity > 0 and desiredQuantity % 1 == 0 and desiredQuantity <= remainingQuantity then
             if transactionId then
-                local fillOrderResult = fillOrder:InvokeServer(transactionId, desiredQuantity)
-                if fillOrderResult then
+                local fillOrderResult = fillOrder:InvokeServer(transactionId, desiredQuantity, price, transactionType, viewingItemType)
+                if fillOrderResult.statusCode ~= -1 then
                     UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage)
                     UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage)
                 else 
-                    -- display error message
+                    task.spawn(SharedUtility.DisplayErrorMessage, fillOrderResult.message, errorLabel)
                 end
                 
                 fillOrderConfirmationFrame.Visible = false
@@ -273,10 +285,11 @@ local function PlaceMarketOrder(transactionType)
 
     if desiredQuantity ~= nil then
         local result = marketFillOrder:InvokeServer(viewingItemType, transactionType, desiredQuantity, false)
-        if result then
-            print(result)
+        if result.statusCode ~= -1 then
+            UpdateOrderList(SharedUtility.TransactionType.BuyOrder, viewingItemType, buyViewPageNumber, numberOfOrdersPerPage)
+            UpdateOrderList(SharedUtility.TransactionType.SellOrder, viewingItemType, sellViewPageNumber, numberOfOrdersPerPage)
         else
-            -- display error message
+            task.spawn(SharedUtility.DisplayErrorMessage, result.message, errorLabel)
         end
     end
 end
@@ -337,6 +350,8 @@ local function DisplaySelectOrderItem()
 end
 
 local function InitializeUI()
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+
     buyViewPageLabel.Text = buyViewPageNumber
     sellViewPageLabel.Text = sellViewPageNumber
 
