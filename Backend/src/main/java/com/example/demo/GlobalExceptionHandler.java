@@ -18,7 +18,6 @@ public class GlobalExceptionHandler {
 	    return ResponseEntity.badRequest().body("Invalid request payload: " + ex.getMessage());
 	}
 	
-	// handles exceptions from illegal or missing arguments passed to the URL
 	@ExceptionHandler({MissingServletRequestParameterException.class, IllegalArgumentException.class})
 	public ResponseEntity<String> hanleInvalidPageAccess(Exception ex) {
 		return ResponseEntity.badRequest().body("Invalid or missing parameters: " + ex.getMessage());
@@ -26,7 +25,7 @@ public class GlobalExceptionHandler {
 	
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> handleOtherExceptions(IllegalStateException ex) {
-    	return ResponseEntity.badRequest().body("IllegalStateException: " + ex.getMessage());
+    	return ResponseEntity.badRequest().body(ex.getMessage());
     }
 	
 	// handles any other uncaught exceptions from our Controller class

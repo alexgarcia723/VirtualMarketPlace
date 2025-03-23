@@ -23,7 +23,7 @@ public class TransactionService {
 		this.transactionRepository = transactionRepository;
 	}
 
-	public void PlaceOrder(OrderTransaction transactionDetails) {
+	public UUID PlaceOrder(OrderTransaction transactionDetails) {
 		// this method adds a new buy/sell order to PendingTransactions table
 		if (transactionDetails.getPrice() <= 0) {
 			throw new IllegalStateException("Price must be greater than 0");
@@ -40,10 +40,11 @@ public class TransactionService {
 
 		// validation passed: save the order to the database
 		transactionRepository.save(transactionDetails);
+		return transactionDetails.getTransactionId();
 	}
 
 	@Transactional
-	public void FillMarketOrder(int itemTypeIndex, int transactonTypeIndex, int desiredQuantity, int ownerId, double availableFunds, boolean partialFill) throws IllegalStateException {
+	public double FillMarketOrder(int itemTypeIndex, int transactonTypeIndex, int desiredQuantity, int ownerId, double availableFunds, boolean partialFill) throws IllegalStateException {
 		// WE PROBABLY SHOULD HAVE A MAXIMUM desiredQuantity BECAUSE WE DON'T WANT TO SEARCH THE ENTIRE TABLE (maybe limit to 1 page?)
 		
 		// this method processes the player's request to buy/sell certain quantity of an item from any available unfilled orders
@@ -84,6 +85,8 @@ public class TransactionService {
 		if (satisfiedQuantity != desiredQuantity) {
 			throw new IllegalStateException("Insufficient quantity of item available to complete market order without partial fill");
 		}
+		
+		return runningCost;
 	}
 	
 	public void FillLimitOrder(UUID otherTransactionId, int desiredQuantity, int ownerId) throws IllegalStateException {

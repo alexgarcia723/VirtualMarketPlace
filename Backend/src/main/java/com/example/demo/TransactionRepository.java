@@ -11,7 +11,7 @@ import org.springframework.data.repository.ListPagingAndSortingRepository;
 /*
  * Useful info:
  * 	https://github.com/mrahhal/blog/blob/main/posts/2023-05-14-offset-vs-keyset-pagination/post.md
- * 
+ * 	https://www.geeksforgeeks.org/sql-injection/
  */
 // TODO: Try to implement keyset pagination? Probably not necessary...
 public interface TransactionRepository extends ListPagingAndSortingRepository<Transaction, UUID> {

@@ -17,10 +17,8 @@ import com.google.gson.Gson;
 
 import jakarta.validation.Valid;
 
-/*
- * Useful info:
+/* Useful info:
  * 	https://stackoverflow.com/questions/3595160/what-does-the-valid-annotation-indicate-in-spring
- * 
  */
 
 /*
@@ -33,6 +31,7 @@ import jakarta.validation.Valid;
  	- Must add timestamp to each transaction in CompletedTransaction table
  		- then get list of up to X transactions where itemId = ?1 and time < ?2
  		- e.g SELECT * FROM completed_transactions WHERE itemId = Apple AND time < 24h
+ TODO: add endpoint to cancel a transaction (set remaining quantity to zero and return remaining quantity & price)
 */
 
 @RestController
@@ -47,15 +46,15 @@ public class TransactionController {
 	}
 	
 	@PostMapping("/placeOrder")
-	public ResponseEntity<String> PlaceOrder(@Valid @RequestBody OrderTransaction transactionDetails) {
+	public ResponseEntity<String[]> PlaceOrder(@Valid @RequestBody OrderTransaction transactionDetails) {
 		// this method intercepts the user's HTTP request to place an order and forwards it to the TransactionService
 			
-		transactionService.PlaceOrder(transactionDetails);
-		return ResponseEntity.ok().body("Order placed successfuly.");
+		UUID orderId = transactionService.PlaceOrder(transactionDetails);
+		return ResponseEntity.ok().body(new String[]{String.valueOf(orderId), "Order placed successfully."});
 	}
 
 	@PostMapping(path = "/fillMarketOrder", consumes = "application/json")
-	public ResponseEntity<String> FillMarketOrder(@RequestBody String jsonBody) {
+	public ResponseEntity<String[]> FillMarketOrder(@RequestBody String jsonBody) {
 		// this method intercepts the user's HTTP request to perform a market buy/sell and forwards it to TransactionService
 		
 		// get our values from the user's JSON and convert them to the correct types to pass to TransactionService
@@ -66,9 +65,11 @@ public class TransactionController {
 		int ownerId = Integer.valueOf(orderDetails.get("ownerId"));
 		double availableFunds = Double.valueOf(orderDetails.get("availableFunds"));
 		boolean partialFill = Boolean.valueOf(orderDetails.get("availableFunds"));
-
-		transactionService.FillMarketOrder(itemTypeIndex, transactionTypeIndex, desiredQuantity, ownerId, availableFunds, partialFill);
-		return ResponseEntity.ok().body("Order fulfilled successfully."); 
+		
+		double spentFunds = transactionService.FillMarketOrder(itemTypeIndex, transactionTypeIndex, desiredQuantity, ownerId, availableFunds, partialFill);
+//		String[] returnBody = new String[]{String.valueOf(spentFunds), "Order fulfilled successfully."};
+//		return ResponseEntity.ok().body(gson.toJson(returnBody));
+		return ResponseEntity.ok().body(new String[]{String.valueOf(spentFunds), "Order fulfilled successfully."});
 	}
 
 	@PostMapping(path = "/fillLimitOrder", consumes = "application/json")
