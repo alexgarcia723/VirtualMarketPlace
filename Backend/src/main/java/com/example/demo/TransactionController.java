@@ -2,6 +2,7 @@ package com.example.demo;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +32,6 @@ import jakarta.validation.Valid;
  	- Must add timestamp to each transaction in CompletedTransaction table
  		- then get list of up to X transactions where itemId = ?1 and time < ?2
  		- e.g SELECT * FROM completed_transactions WHERE itemId = Apple AND time < 24h
- TODO: add endpoint to cancel a transaction (set remaining quantity to zero and return remaining quantity & price)
 */
 
 @RestController
@@ -92,5 +92,26 @@ public class TransactionController {
 		List<OrderTransaction> pendingTransactions = transactionService.GetPageForItem(itemType, transactionType, pageNum);
 		return ResponseEntity.ok().body(pendingTransactions); 
 	}
+	
+	@PostMapping(path = "/cancelOrder", consumes = "application/json")
+	public ResponseEntity<String[]> CancelOrder(@RequestBody String jsonBody) {
+		// this method intercepts the user's HTTP request to cancel an order and forwards it to the TransactionService
+		HashMap<String, String> orderDetails = gson.fromJson(jsonBody, HashMap.class);
+		UUID transactionID =  UUID.fromString(orderDetails.get("transactionId").toString());
+		int ownerId = Integer.valueOf(orderDetails.get("ownerId"));
+		OrderTransaction canceledTransaction = transactionService.CancelOrder(transactionID, ownerId);
+		String orderJson = gson.toJson(canceledTransaction);
+		
+		return ResponseEntity.ok().body(new String[]{orderJson, "Order canceled successfully."});
+	}
 
+	// TODO: should this be a GET mapping?
+	@PostMapping("/getOrderStatus")
+	public ResponseEntity<HashMap<String, ArrayList<OrderTransaction>> > GetPageForItem(@RequestBody String jsonBody) {
+		// this method intercepts the user's HTTP request to get information about pending orders and forwards it to TransactionService
+		HashMap<String, ArrayList<String>> orderIdList = gson.fromJson(jsonBody, HashMap.class);
+		
+		HashMap<String, ArrayList<OrderTransaction>> pendingTransactions = transactionService.GetOrderStatus(orderIdList);
+		return ResponseEntity.ok().body(pendingTransactions);
+	}
 }

@@ -18,24 +18,27 @@ public interface TransactionRepository extends ListPagingAndSortingRepository<Tr
 	OrderTransaction save(OrderTransaction transaction);
 	FulfillmentTransaction save(FulfillmentTransaction transaction);
 	
+	@Query("select t from #{#entityName} t where t.transactionId = ?1")
+	Optional<OrderTransaction> findOrderByTransactionId(UUID transactionId);
+	
 	@Query("select t from #{#entityName} t where t.transactionId = ?1 and t.remainingQuantity != 0")
-	Optional<OrderTransaction> findPendingByTransactionId(UUID transactionId);
+	Optional<OrderTransaction> findOrderActiveByTransactionId(UUID transactionId);
 	
 	@Query("select t from #{#entityName} t where t.itemType = ?1 and t.transactionType = ?2 and t.remainingQuantity != 0")
-	List<OrderTransaction> findPendingByItemTypeAndTransactionType(ItemType itemType, TransactionType transactionType, Pageable pageable);
+	List<OrderTransaction> findOrderByItemTypeAndTransactionType(ItemType itemType, TransactionType transactionType, Pageable pageable);
+	
+	@Query("select t from #{#entityName} t where t.ownerId = ?1")
+	List<OrderTransaction> findOrderByOwnerId(String ownerId);
 	
 	// unused queries
 	@Query("select t from #{#entityName} t where t.itemType = ?1")
-	List<OrderTransaction> findPendingByItemType(ItemType itemType,  Pageable pageable);
+	List<OrderTransaction> findOrderByItemType(ItemType itemType,  Pageable pageable);
 	
 	@Query("select t from #{#entityName} t where t.itemType = ?1")
-	List<FulfillmentTransaction> findCompletedByItemType(ItemType itemType, Pageable pageable);
+	List<FulfillmentTransaction> findFulfillmentByItemType(ItemType itemType, Pageable pageable);
 	
 	@Query("select t from #{#entityName} t where t.ownerId = ?1")
-	List<OrderTransaction> findPendingByItemMerchantId(String sellerId);
-	
-	@Query("select t from #{#entityName} t where t.ownerId = ?1")
-	List<FulfillmentTransaction> finCompletedByItemMerchantId(String sellerId);
+	List<FulfillmentTransaction> findFulfillmentByItemMerchantId(String sellerId);
 
 //	Optional<PendingTransaction> findById(UUID transactionId);
 }

@@ -18,6 +18,17 @@ public class OrderTransaction extends Transaction {
 
 	public OrderTransaction() {
 	}
+	
+	public OrderTransaction(OrderTransaction originalTransaction) {
+		this.transactionType = originalTransaction.transactionType;
+		this.itemType = originalTransaction.itemType;
+		this.originalQuantity = originalTransaction.originalQuantity;
+		this.remainingQuantity = originalTransaction.remainingQuantity; 
+		this.price = originalTransaction.price;
+		this.ownerId = originalTransaction.ownerId;
+		this.ownerName = originalTransaction.ownerName;
+		this.transactionId = originalTransaction.transactionId;
+	}
 
 	public OrderTransaction(TransactionType transactionType, ItemType itemType, int originalQuantity, int remainingQuantity, double price, int ownerId, String ownerName) {
 		this.transactionType = transactionType;
