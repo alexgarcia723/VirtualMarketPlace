@@ -10,7 +10,11 @@ local getOrdersPage = remotesFolder:FindFirstChild("GetOrdersPage")
 local placeOrder = remotesFolder:FindFirstChild("PlaceOrder")
 local fillOrder = remotesFolder:FindFirstChild("FillOrder")
 local marketFillOrder = remotesFolder:FindFirstChild("MarketFillOrder")
+local notifyOrderCanceled = remotesFolder:FindFirstChild("NotifyOrderCancel")
+
 local marketplaceUI = player.PlayerGui:WaitForChild("MarketplaceUI")
+local inventoryUI = player.PlayerGui:WaitForChild("InventoryUI")
+local topbarUI = player.PlayerGui:WaitForChild("TopbarUI")
 
 -- UI container frames
 local mainPane = marketplaceUI:FindFirstChild("MainPane")
@@ -113,6 +117,11 @@ local function UpdateOrderList(orderType, itemType, pageNumber, numberOfOrdersPe
             orderLine:SetAttribute("RemainingQuantity", nil)
         end
     end
+
+    local playerData = SharedUtility.GetLocalPlayerData()
+    local itemName = SharedUtility.ItemTypeLookup[viewingItemType]
+    local itemCount = playerData.inventory[itemName]
+    selectedItemLabel.Text = itemName .. "(" .. itemCount .. ")"
 end
 
 local function NextPage(viewType)
@@ -295,12 +304,16 @@ local function PlaceMarketOrder(transactionType)
 end
 
 local function UpdateItemSelection(itemName)
+    local playerData = SharedUtility.GetLocalPlayerData()
+    local itemCount = playerData.inventory[itemName]
+
     viewingItemType = SharedUtility.ItemType[itemName]
     selectedOrderItemType = SharedUtility.ItemType[itemName]
 
     selectedItemIcon.Image = SharedUtility.ItemTypeIcons[itemName]
     itemViewItemIcon.Image = SharedUtility.ItemTypeIcons[itemName]
-    selectedItemLabel.Text = itemName
+
+    selectedItemLabel.Text = itemName .. " (" .. itemCount .. ")"
 
     -- update page text
     sellViewPageNumber = 1
@@ -351,6 +364,9 @@ end
 
 local function InitializeUI()
     StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+    inventoryUI.Enabled = false
+    marketplaceUI.Enabled = true
+    topbarUI.Enabled = true
 
     buyViewPageLabel.Text = buyViewPageNumber
     sellViewPageLabel.Text = sellViewPageNumber
@@ -406,5 +422,6 @@ marketOrderBuyButton.MouseButton1Click:Connect(function() PlaceMarketOrder(Share
 marketOrderSellButton.MouseButton1Click:Connect(function() PlaceMarketOrder(SharedUtility.TransactionType.SellOrder) end)
 placeOrderButton.MouseButton1Click:Connect(DisplayOrderPlaceConfirmation)
 selectOrderItemButton.MouseButton1Click:Connect(DisplaySelectOrderItem)
+notifyOrderCanceled.Event:Connect(function() UpdateItemSelection(SharedUtility.ItemTypeLookup[viewingItemType]) end)
 
 InitializeUI()

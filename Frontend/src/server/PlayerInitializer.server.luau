@@ -8,20 +8,21 @@ local MarketplaceTempalateUI = StarterGui:FindFirstChild("MarketplaceUI")
 local TopbarTemplateUI = StarterGui:FindFirstChild("TopbarUI")
 local InventoryUI = StarterGui:FindFirstChild("InventoryUI")
 
-local DataStoreName = "WlqwBMzNmPR"
+local DataStoreName = "KbqpfWzNt1R"
 local playerDataStore = DataStoreService:GetDataStore(DataStoreName)
 local getOptions = Instance.new("DataStoreGetOptions")
 getOptions.UseCache = false
 
 local function GetInitializedPlayerData()
+    local startingItemCount = 20
     local initializedPlayerData = {
         currency = 1000000,
         inventory = {
-            Apple = 10000,
-            Banana = 10000,
-            Orange = 10000,
-            Grape = 10000,
-            Watermelon = 10000
+            Apple = startingItemCount,
+            Banana = startingItemCount,
+            Orange = startingItemCount,
+            Grape = startingItemCount,
+            Watermelon = startingItemCount
         },
         pendingPlayerOrders = {}
     }
@@ -73,10 +74,28 @@ local function ProcessPlayerLeave(player)
         return playerDataStore:SetAsync(playerId, playerData)
     end)
 
+    -- print("Saved player data for " .. player.Name)
+
     if not setSuccess then
         -- keep retrying periodically
+    else
+        Utility.GlobalPlayerDataTable[playerId] = nil
+    end
+end
+
+local function AwaitDataSave()
+    local numItems = 0
+    for key, value in pairs(Utility.GlobalPlayerDataTable) do
+        numItems += 1
+        -- playerDataStore:SetAsync(playerId, playerData)
+    end
+
+    if numItems ~= 0 then
+        print("Waiting 1s for save to finish ...")
+        task.wait(1)
     end
 end
 
 Players.PlayerAdded:Connect(ProcessPlayerJoin)
 Players.PlayerRemoving:Connect(ProcessPlayerLeave)
+game:BindToClose(AwaitDataSave)

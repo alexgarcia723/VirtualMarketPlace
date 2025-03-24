@@ -20,9 +20,15 @@
         },
         "MarketFillOrder": {
           "$className": "RemoteFunction"
+        },
+        "RequestCancelOrder": {
+          "$className": "RemoteFunction"
         }, 
         "PlayerDataUpdate": {
           "$className": "RemoteEvent"
+        }, 
+        "NotifyOrderCancel": {
+          "$className": "BindableEvent"
         }
       }
     },
@@ -46,8 +52,10 @@
     "StarterGui": {
       "MarketplaceUI": {
         "$path": "src/assets/MarketplaceUI.rbxm"
-      }, "CurrencyUI": {
-        "$path": "src/assets/CurrencyUI.rbxm"
+      }, "TopbarUI": {
+        "$path": "src/assets/TopbarUI.rbxm"
+      }, "InventoryUI": {
+        "$path": "src/assets/InventoryUI.rbxm"
       }
     },
 

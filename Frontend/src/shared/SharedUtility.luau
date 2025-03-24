@@ -1,5 +1,6 @@
 local SharedUtility = {}
 local ErrorMessageUI = game
+SharedUtility.LocalPlayerData = nil
 
 -- All these "Enums" should instead be generated from an HTTP request from the server.
 SharedUtility.TransactionType = {
@@ -10,8 +11,8 @@ SharedUtility.TransactionType = {
 }
 
 SharedUtility.TransactionTypeLookup = {
-    [0] = "Buy Order",
-	[1] = "Sell Order",
+    [0] = "BuyOrder",
+	[1] = "SellOrder",
 	[2] = "Buy",
 	[3] = "Sell"
 }
@@ -49,6 +50,14 @@ end
 
 function SharedUtility.GetRandomTransactionType()
     return Random.new():NextInteger(0, #SharedUtility.TransactionType)
+end
+
+function SharedUtility.GetLocalPlayerData()
+	while not SharedUtility.LocalPlayerData do
+		task.wait()
+	end
+
+	return SharedUtility.LocalPlayerData
 end
 
 return SharedUtility
