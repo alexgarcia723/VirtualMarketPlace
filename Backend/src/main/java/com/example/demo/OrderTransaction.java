@@ -34,7 +34,7 @@ public class OrderTransaction extends Transaction {
 		this.transactionType = transactionType;
 		this.itemType = itemType;
 		this.originalQuantity = originalQuantity;
-		this.remainingQuantity = originalQuantity; // originalQuantity = reminingQuantity for all new orders
+		this.remainingQuantity = originalQuantity; // originalQuantity = remainingQuantity for all new orders
 		this.price = price;
 		this.ownerId = ownerId;
 		this.ownerName = ownerName;

@@ -21,7 +21,7 @@ public class FulfillmentTransaction extends Transaction {
 
 	@ManyToOne(cascade = CascadeType.ALL)
 	@JoinColumn(name = "otherTransactionId", referencedColumnName = "transactionId", nullable = false)
-	// Foreign key which references a PendingTransaction that is fulfilled by this CompletedTransaction
+	// Foreign key which references a OrderTransaction that is fulfilled by this FulfillmentTransaction
 	private OrderTransaction otherTransaction;
 
 	public FulfillmentTransaction() {
@@ -36,7 +36,7 @@ public class FulfillmentTransaction extends Transaction {
 		this.otherTransaction = otherTransaction;
 	}
 	
-	public FulfillmentTransaction(int desiredQuantity, int ownerId, OrderTransaction otherTransaction) {
+	public FulfillmentTransaction(int fulfilledQuantity, int ownerId, String ownerName, OrderTransaction otherTransaction) {
 		if (otherTransaction.getTransactionType() == TransactionType.SellOrder) {
 			this.transactionType = TransactionType.Buy;
 		} else if (otherTransaction.getTransactionType() == TransactionType.BuyOrder) {
@@ -44,9 +44,10 @@ public class FulfillmentTransaction extends Transaction {
 		}
 		
 		this.itemType = otherTransaction.getItemType();
-		this.originalQuantity = otherTransaction.getOriginalQuantity();
+		this.originalQuantity = fulfilledQuantity;
 		this.price = otherTransaction.getPrice();
 		this.ownerId = ownerId;
+		this.ownerName = ownerName;
 		this.otherTransaction = otherTransaction;
 	}
 

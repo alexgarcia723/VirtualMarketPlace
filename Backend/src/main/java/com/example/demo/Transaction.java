@@ -1,10 +1,11 @@
 package com.example.demo;
 
 import java.util.UUID;
+import java.util.Date;
 import jakarta.persistence.Column;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
-
+import java.sql.Timestamp;
 
 @MappedSuperclass
 public abstract class Transaction {
@@ -16,8 +17,18 @@ public abstract class Transaction {
 	protected double price;
 	protected int ownerId;
 	protected String ownerName;
+	protected Timestamp timestamp = new Timestamp((new Date()).getTime());
 	@Id
 	protected UUID transactionId = UUID.randomUUID();
+	
+	@Column(name = "timestamp", nullable = false)
+	public Timestamp getTimestamp() {
+		return timestamp;
+	}
+
+	public void setTimestamp(Timestamp timestamp) {
+		this.timestamp = timestamp;
+	}
 	
 	
 	@Column(name = "ownerName", nullable = true)

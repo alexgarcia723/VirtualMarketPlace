@@ -12,15 +12,14 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 	
-	// handles exceptions that occur when we try to convert user's JSON into a Transaction object
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<String> handleInvalidTransaction(HttpMessageNotReadableException ex) {
-	    return ResponseEntity.badRequest().body("Invalid request payload: " + ex.getMessage());
+	    return ResponseEntity.badRequest().body(ex.getMessage());
 	}
 	
 	@ExceptionHandler({MissingServletRequestParameterException.class, IllegalArgumentException.class})
 	public ResponseEntity<String> hanleInvalidPageAccess(Exception ex) {
-		return ResponseEntity.badRequest().body("Invalid or missing parameters: " + ex.getMessage());
+		return ResponseEntity.badRequest().body(ex.getMessage());
 	}
 	
     @ExceptionHandler(IllegalStateException.class)

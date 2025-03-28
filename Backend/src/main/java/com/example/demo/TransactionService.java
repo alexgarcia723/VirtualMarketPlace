@@ -14,11 +14,17 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.google.gson.internal.LinkedTreeMap;
+
 
 @Service
 public class TransactionService {
-	static private final TransactionType transactionEnums[] = TransactionType.values();
-	static private final ItemType itemEnums[] = ItemType.values();
+	static private final TransactionType transactionTypes[] = TransactionType.values();
+	static private final ItemType itemTypes[] = ItemType.values();
+	static private final TransactionType buyOrderType = TransactionType.BuyOrder;
+	static private final TransactionType sellOrderType = TransactionType.SellOrder;
+	static private int ordersPerPage = 10;
+	
 	private final TransactionRepository transactionRepository;
 
 	@Autowired
@@ -35,8 +41,8 @@ public class TransactionService {
 			throw new IllegalStateException("Invalid or missing TransactionType value");
 		} else if (transactionDetails.getItemType() == null) {
 			throw new IllegalStateException("Invalid or missing ItemType value");
-		} else if (transactionDetails.getOwnerId() <= 0) {
-			throw new IllegalStateException("OwnerId value must be greater than 0");
+//		} else if (transactionDetails.getOwnerId() <= 0) {
+//			throw new IllegalStateException("OwnerId value must be greater than 0");
 		} else if (transactionDetails.getOriginalQuantity() <= 0) {
 			throw new IllegalStateException("Quantity value cannot be less than 0");
 		}
@@ -47,14 +53,16 @@ public class TransactionService {
 	}
 
 	@Transactional
-	public double FillMarketOrder(int itemTypeIndex, int transactonTypeIndex, int desiredQuantity, int ownerId, double availableFunds, boolean partialFill) throws IllegalStateException {
-		// TODO: WE PROBABLY SHOULD HAVE A MAXIMUM desiredQuantity BECAUSE WE DON'T WANT TO SEARCH THE ENTIRE TABLE (maybe limit to 1 page?)
+	public double FillMarketOrder(int itemTypeIndex, int transactonTypeIndex, int desiredQuantity, int ownerId, String ownerName, double availableFunds) throws IllegalStateException {		
+		// this method attempts to fulfill the player's market fill request using the orders from the first page
+		ItemType itemType = itemTypes[itemTypeIndex];
+		TransactionType transactionType = transactionTypes[transactonTypeIndex];
+		TransactionType fulfillmentTransactionType = TransactionType.Buy;
+		if (transactionType == TransactionType.BuyOrder) {
+			fulfillmentTransactionType = TransactionType.Sell;
+		}
 		
-		// this method processes the player's request to buy/sell certain quantity of an item from any available unfilled orders
-		ItemType itemType = itemEnums[itemTypeIndex];
-		TransactionType transactionType = transactionEnums[transactonTypeIndex];
-		
-		Pageable sortedByPriceAsc = PageRequest.of(0, 10, Sort.by("price").ascending());
+		Pageable sortedByPriceAsc = PageRequest.of(0, ordersPerPage, Sort.by("price").ascending());
 		List<OrderTransaction> pendingTransactions = transactionRepository
 				.findOrderByItemTypeAndTransactionType(itemType, transactionType, sortedByPriceAsc);
 		
@@ -68,19 +76,25 @@ public class TransactionService {
 				// we do not want to complete this market order with our own pending orders
 				continue;
 			}
+			
+			double price = transaction.getPrice();
 			int remainingQuantity = transaction.getRemainingQuantity();
 			if (remainingQuantity >= unsatisfiedQuantity) {
-				runningCost += transaction.getPrice() * unsatisfiedQuantity;
+				runningCost += price * unsatisfiedQuantity;
 				satisfiedQuantity += unsatisfiedQuantity;
 				
 				transaction.setRemainingQuantity(remainingQuantity - unsatisfiedQuantity);
+				FulfillmentTransaction fulfillmentTransaction = new FulfillmentTransaction(unsatisfiedQuantity, ownerId, ownerName, transaction);
+				transactionRepository.save(fulfillmentTransaction);
 				unsatisfiedQuantity = 0;
 				break;
 			} else {
-				runningCost += transaction.getPrice() * remainingQuantity;
+				runningCost += price * remainingQuantity;
 				satisfiedQuantity += remainingQuantity;
 				
 				transaction.setRemainingQuantity(0);
+				FulfillmentTransaction fulfillmentTransaction = new FulfillmentTransaction(remainingQuantity, ownerId, ownerName, transaction);
+				transactionRepository.save(fulfillmentTransaction);
 				unsatisfiedQuantity -= remainingQuantity;
 			}
 		}
@@ -96,7 +110,7 @@ public class TransactionService {
 		return runningCost;
 	}
 	
-	public void FillLimitOrder(UUID otherTransactionId, int desiredQuantity, int ownerId) throws IllegalStateException {
+	public void FillLimitOrder(UUID otherTransactionId, int desiredQuantity, int ownerId, String ownerName) throws IllegalStateException {
 		// this method processes the player's request to fill a buy/sell order with a specific transactionId
 		Optional<OrderTransaction> optionalTransaction = transactionRepository
 				.findOrderActiveByTransactionId(otherTransactionId);
@@ -113,7 +127,7 @@ public class TransactionService {
 				throw new IllegalStateException("Requested quantity is more than quantity that is available.");
 			} else if (otherTransaction.getRemainingQuantity() >= desiredQuantity) {
 				// build our fulfillment transaction and add it to CompletedTransactions
-				FulfillmentTransaction transaction = new FulfillmentTransaction(desiredQuantity, ownerId, otherTransaction);
+				FulfillmentTransaction transaction = new FulfillmentTransaction(desiredQuantity, ownerId, ownerName, otherTransaction);
 				transactionRepository.save(transaction);
 				// update the transaction we are fulfilling
 				otherTransaction.remainingQuantity -= desiredQuantity;
@@ -124,18 +138,49 @@ public class TransactionService {
 		}
 	}
 	
-	public List<OrderTransaction> GetPageForItem(String itemTypeStr, String transactionTypeStr, String pageNum) {
-		// this method returns a page of items with a specific itemType and transactionType value at page pageNum
-		ItemType itemType = itemEnums[Integer.parseInt(itemTypeStr)];
-		TransactionType transactionType = transactionEnums[Integer.parseInt(transactionTypeStr)];
+	// TODO: OrdersPerPage could be passed into this method from ROBLOX Server and used inside sorting configuration
+	public HashMap<String, HashMap<String, HashMap<Integer, List<OrderTransaction>>>> GetItemOrderPages(HashMap<String, LinkedTreeMap<String, List<Number>>> requestedPages) {
+		// this method returns pages from database with indices defined in requestedPages
 		
-		// get page from database (page number, 10 items per page, by price and ascending)
-		Pageable sortedByPriceAsc = PageRequest.of(Integer.parseInt(pageNum) - 1, 10, Sort.by("price").ascending()); // Sort.by("price").and(Sort.by("quantityRemaining"))
-		List<OrderTransaction> pendingTransactions = transactionRepository
-				.findOrderByItemTypeAndTransactionType(itemType, transactionType, sortedByPriceAsc);
-
-		// return our list of PendingTransaction
-		return pendingTransactions;
+		HashMap<String, HashMap<String, HashMap<Integer, List<OrderTransaction>>>> buySellOrderPages = new HashMap<>();
+		for (ItemType itemType: itemTypes) {
+			String itemName = itemType.name();
+			LinkedTreeMap<String, List<Number>> requestedItemPageIndices = requestedPages.get(itemName);
+			if (requestedItemPageIndices == null) {
+				continue;
+			}
+			
+			List<Number> buyPageIndices = requestedItemPageIndices.get("buyPageIndices");
+			List<Number> sellPageIndices = requestedItemPageIndices.get("sellPageIndices");
+			
+			HashMap<String, HashMap<Integer, List<OrderTransaction>>> foundBuySellPages = new HashMap<>();
+			foundBuySellPages.put("foundBuyPages", new HashMap<Integer, List<OrderTransaction>>());
+			foundBuySellPages.put("foundSellPages", new HashMap<Integer, List<OrderTransaction>>());
+			
+			// get buy orders
+			for (Number pageIndex: buyPageIndices) {
+				// define sorting configuration
+				Pageable sortPriceAsc = PageRequest.of(pageIndex.intValue() - 1, ordersPerPage, Sort.by("price").ascending());
+				
+				// get page from database
+				List<OrderTransaction> ordersPage = transactionRepository.findOrderByItemTypeAndTransactionType(itemType, buyOrderType, sortPriceAsc);
+				foundBuySellPages.get("foundBuyPages").put(pageIndex.intValue(),  ordersPage);
+			}
+			
+			// get sell orders
+			for (Number pageIndex: sellPageIndices) {
+				// define sorting configuration
+				Pageable sortPriceAsc = PageRequest.of(pageIndex.intValue() - 1, ordersPerPage, Sort.by("price").ascending());
+				
+				// get page from database
+				List<OrderTransaction> ordersPage = transactionRepository.findOrderByItemTypeAndTransactionType(itemType, sellOrderType, sortPriceAsc);
+				foundBuySellPages.get("foundSellPages").put(pageIndex.intValue(),  ordersPage);
+			}
+			
+			buySellOrderPages.put(itemName, foundBuySellPages);
+		}
+		
+		return buySellOrderPages;
 	}
 	
 	
@@ -186,5 +231,18 @@ public class TransactionService {
 			return blankOrder;
 //			throw new IllegalStateException("Transaction you are trying to cancel does not exist");
 		}
+	}
+	
+	public HashMap<String, List<FulfillmentTransaction>> GetItemOrderHistories() {
+		// this method retrieves transaction histories for all items with 10 entries per item
+		
+		HashMap<String, List<FulfillmentTransaction>> orderHistories = new HashMap<String, List<FulfillmentTransaction>>();
+		Pageable sortTimeDesc = PageRequest.of(0, ordersPerPage, Sort.by("timestamp").descending());
+		for (ItemType itemType: itemTypes) {
+			List<FulfillmentTransaction> orderTransactions = transactionRepository.findFulfillmentOrderByItemType(itemType, sortTimeDesc);
+			orderHistories.put(itemType.name(), orderTransactions);
+		}
+		
+		return orderHistories;
 	}
 }

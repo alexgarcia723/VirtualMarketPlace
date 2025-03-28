@@ -30,15 +30,13 @@ public interface TransactionRepository extends ListPagingAndSortingRepository<Tr
 	@Query("select t from #{#entityName} t where t.ownerId = ?1")
 	List<OrderTransaction> findOrderByOwnerId(String ownerId);
 	
-	// unused queries
 	@Query("select t from #{#entityName} t where t.itemType = ?1")
-	List<OrderTransaction> findOrderByItemType(ItemType itemType,  Pageable pageable);
+	List<FulfillmentTransaction> findFulfillmentOrderByItemType(ItemType itemType,  Pageable pageable);
 	
+	// unused queries
 	@Query("select t from #{#entityName} t where t.itemType = ?1")
 	List<FulfillmentTransaction> findFulfillmentByItemType(ItemType itemType, Pageable pageable);
 	
 	@Query("select t from #{#entityName} t where t.ownerId = ?1")
 	List<FulfillmentTransaction> findFulfillmentByItemMerchantId(String sellerId);
-
-//	Optional<PendingTransaction> findById(UUID transactionId);
 }
