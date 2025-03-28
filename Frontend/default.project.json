@@ -9,9 +9,6 @@
       },
       "Remotes": {
         "$className": "Folder",
-        "GetOrdersPage": {
-          "$className": "RemoteFunction"
-        },
         "PlaceOrder": {
           "$className": "RemoteFunction"
         },
@@ -23,12 +20,21 @@
         },
         "RequestCancelOrder": {
           "$className": "RemoteFunction"
-        }, 
+        },         
+        "GetNumOrdersPerPage": {
+          "$className": "RemoteFunction"
+        },   
+        "UpdateClientItemOrderHistories": {
+          "$className": "RemoteEvent"
+        },
         "PlayerDataUpdate": {
           "$className": "RemoteEvent"
-        }, 
-        "NotifyOrderCancel": {
-          "$className": "BindableEvent"
+        },
+        "UpdateServerViewingPages": {
+          "$className": "RemoteEvent"
+        },
+        "UpdateClientPages": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -54,8 +60,6 @@
         "$path": "src/assets/MarketplaceUI.rbxm"
       }, "TopbarUI": {
         "$path": "src/assets/TopbarUI.rbxm"
-      }, "InventoryUI": {
-        "$path": "src/assets/InventoryUI.rbxm"
       }
     },
 

@@ -2,13 +2,12 @@ local Players = game:GetService("Players")
 -- local ServerStorage = game:GetService("ServerStorage")
 local StarterGui = game:GetService("StarterGui")
 local DataStoreService = game:GetService("DataStoreService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Utility = require("./Utility")
 local MarketplaceTempalateUI = StarterGui:FindFirstChild("MarketplaceUI")
 local TopbarTemplateUI = StarterGui:FindFirstChild("TopbarUI")
 local InventoryUI = StarterGui:FindFirstChild("InventoryUI")
 
-local DataStoreName = "KbqpfWzNt1R"
+local DataStoreName = "KbqsjWzUt1X"
 local playerDataStore = DataStoreService:GetDataStore(DataStoreName)
 local getOptions = Instance.new("DataStoreGetOptions")
 getOptions.UseCache = false
@@ -36,8 +35,6 @@ local function ProcessPlayerJoin(player)
     marketplaceUI.Parent = player.PlayerGui
     local topbarUI = TopbarTemplateUI:Clone()
     topbarUI.Parent = player.PlayerGui
-    local inventoryUI = InventoryUI:Clone()
-    inventoryUI.Parent = player.PlayerGui
     local playerId = player.UserId
 
     -- get player data
@@ -80,6 +77,7 @@ local function ProcessPlayerLeave(player)
         -- keep retrying periodically
     else
         Utility.GlobalPlayerDataTable[playerId] = nil
+        Utility.PlayerViewingPages[playerId] = nil
     end
 end
 
