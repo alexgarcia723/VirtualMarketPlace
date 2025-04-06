@@ -7,7 +7,8 @@ local MarketplaceTempalateUI = StarterGui:FindFirstChild("MarketplaceUI")
 local TopbarTemplateUI = StarterGui:FindFirstChild("TopbarUI")
 local InventoryUI = StarterGui:FindFirstChild("InventoryUI")
 
-local DataStoreName = "KbqsjWzUt1X"
+local DataStoreName = "M93sjmcNt1X6"
+-- local DataStoreName = tostring(Random.new():NextInteger(1, 999999))
 local playerDataStore = DataStoreService:GetDataStore(DataStoreName)
 local getOptions = Instance.new("DataStoreGetOptions")
 getOptions.UseCache = false
@@ -23,7 +24,8 @@ local function GetInitializedPlayerData()
             Grape = startingItemCount,
             Watermelon = startingItemCount
         },
-        pendingPlayerOrders = {}
+        pendingPlayerOrders = {},
+        orderProcessing = false
     }
     
     return initializedPlayerData
@@ -58,6 +60,8 @@ local function ProcessPlayerJoin(player)
         playerData = getResult
     end
 
+    print(playerData)
+
     -- send player data to client to update UI
     Utility.GlobalPlayerDataTable[playerId] = playerData
     Utility.UpdatePlayerData(player, 0, {})
@@ -67,6 +71,7 @@ local function ProcessPlayerLeave(player)
     -- save player data on leave
     local playerId = player.UserId
     local playerData = Utility.GlobalPlayerDataTable[playerId]
+    playerData.orderProcessing = false
     local setSuccess, _ = pcall(function()
         return playerDataStore:SetAsync(playerId, playerData)
     end)
@@ -93,6 +98,7 @@ local function AwaitDataSave()
         task.wait(1)
     end
 end
+
 
 Players.PlayerAdded:Connect(ProcessPlayerJoin)
 Players.PlayerRemoving:Connect(ProcessPlayerLeave)

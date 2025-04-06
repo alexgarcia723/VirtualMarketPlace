@@ -57,7 +57,7 @@
 
     "StarterGui": {
       "MarketplaceUI": {
-        "$path": "src/assets/MarketplaceUI.rbxm"
+        "$path": "src/assets/MarketplaceUIAlt.rbxm"
       }, "TopbarUI": {
         "$path": "src/assets/TopbarUI.rbxm"
       }

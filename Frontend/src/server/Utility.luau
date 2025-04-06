@@ -7,7 +7,7 @@ local playerDataUpdate = remotesFolder:FindFirstChild("PlayerDataUpdate")
 local updateClientPages = remotesFolder:FindFirstChild("UpdateClientPages")
 local updateClientItemOrderHistories = remotesFolder:FindFirstChild("UpdateClientItemOrderHistories")
 SharedUtility = require(ReplicatedStorage.Shared.SharedUtility)
-local serverAddress = "http://localhost:8080"
+local serverAddress = "http://localhost:8081"
 local endpoints = {
     placeOrder = "/api/v1/placeOrder",
     fillLimitOrder = "/api/v1/fillLimitOrder",
@@ -23,13 +23,38 @@ Utility.PlayerViewingPages = {}
 Utility.PageCache = {}
 Utility.OrdersPerPage = 10 -- how many orders are in each page returned from the server
 Utility.CacheEntryAgeLimit = 60 -- delete any cache entry older than 1 min
+Utility.RequestQueue = {}
+Utility.PlayerResponseQueue = {}
+-- TODO: wrap every call to HttpService:RequestAsync into its own method that automaticlaly updates playerData.orderProcessing
 
 function Utility.UpdateViewingPages(player, itemType, buyPageIndex, sellPageIndex, beingViewed)
     local userId = player.UserId
     Utility.PlayerViewingPages[userId] = {itemType = itemType, buyPageIndex = buyPageIndex, sellPageIndex = sellPageIndex, beingViewed = beingViewed}
 end
 
-function Utility.UpdatePages()
+function Utility.UpdatePlayerResponseQueue(responseInfo)
+    Utility.PlayerResponseQueue[responseInfo.requestingPlayer] = responseInfo
+end
+
+function Utility.GetPlayerOrderCount(player)
+    -- TODO: instead have an integer and update it whenever we add/remove orders
+    local playerData = Utility.GlobalPlayerDataTable[player.UserId]
+    local playerPendingOrdersTable = playerData.pendingPlayerOrders
+    local orderCount = 0
+    for _, order in pairs(playerPendingOrdersTable) do
+        orderCount += 1
+    end
+
+    return orderCount
+end
+
+function Utility.RemovePlayerOrder(playerId, transactionId)
+    local playerData = Utility.GlobalPlayerDataTable[playerId]
+    local playerPendingOrdersTable = playerData.pendingPlayerOrders
+    playerPendingOrdersTable[transactionId] = nil
+end
+
+function Utility.UpdatePageSend()
     -- construct empty page request list
     local pageRequestList = {}
     for _, itemName in pairs(SharedUtility.ItemTypeLookup) do
@@ -76,117 +101,250 @@ function Utility.UpdatePages()
         return
     end
 
-    -- send our HTTP POST request to get pages from Java server
-    local httpSuccess, response = pcall(function() 
-         return HttpService:RequestAsync({
-            Url = serverAddress..endpoints["getPages"],
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-            },
-            Body = HttpService:JSONEncode(pageRequestList)
-	    })
-    end)
+    -- put our request info onto the RequestQueue
+    local url = serverAddress .. endpoints["getPages"]
+    local body = pageRequestList
+    table.insert(Utility.RequestQueue, {
+        ["url"] = url, 
+        ["body"] = body,
+        ["requestType"] = "POST",
+        ["receiver"] = Utility.UpdatePageReceive,
+        ["requestingPlayer"] = nil
+    })
+end
 
-    if (not httpSuccess) then
-        -- uncaught error in Java backend or HTTPService unavailable
-        return
+function Utility.UpdatePageReceive(responseInfo)
+    local updatedPages = responseInfo.responseData
+
+    -- update page cache
+    for itemName, pageIndices in pairs(updatedPages) do
+        local itemPageCache = Utility.PageCache[itemName]
+        if not itemPageCache then
+            Utility.PageCache[itemName] = {buyPages = {}, sellPages = {}}
+            itemPageCache = Utility.PageCache[itemName]
+        end
+
+        -- update buy page cache
+        for pageIndex, orderList in pairs(updatedPages[itemName].foundBuyPages) do
+            itemPageCache.buyPages[tonumber(pageIndex)] = orderList
+            itemPageCache.buyPages[tonumber(pageIndex)].pageAge = DateTime.now().UnixTimestamp
+        end
+
+        -- update sell page cache
+        for pageIndex, orderList in pairs(updatedPages[itemName].foundSellPages) do
+            itemPageCache.sellPages[tonumber(pageIndex)] = orderList
+            itemPageCache.sellPages[tonumber(pageIndex)].pageAge = DateTime.now().UnixTimestamp
+        end
     end
 
-    if response.StatusCode == 200 then
-        local jsonSuccess, updatedPages = pcall(function() 
-            return HttpService:JSONDecode(response.Body)
-        end)
-
-        if not jsonSuccess then
-            -- json decode failure or HTTPService unavailable
-            return
+    -- send updated pages to clients
+    for _, player in Players:GetPlayers() do
+        local playerViewingPages = Utility.PlayerViewingPages[player.userId]
+        if not playerViewingPages then
+            continue
         end
 
-        -- update page cache
-        for itemName, pageIndices in pairs(updatedPages) do
-            local itemPageCache = Utility.PageCache[itemName]
-            if not itemPageCache then
-                Utility.PageCache[itemName] = {buyPages = {}, sellPages = {}}
-                itemPageCache = Utility.PageCache[itemName]
-            end
+        local itemType = playerViewingPages.itemType
+        local itemName = SharedUtility.ItemTypeLookup[itemType]
+        local buyPageIndex = Utility.PlayerViewingPages[player.userId].buyPageIndex
+        local sellPageIndex = Utility.PlayerViewingPages[player.userId].sellPageIndex
+        local buyPage = Utility.PageCache[itemName].buyPages[buyPageIndex]
+        local sellPage = Utility.PageCache[itemName].sellPages[sellPageIndex]
+        updateClientPages:FireClient(player, itemType, buyPageIndex, sellPageIndex, {buyPage, sellPage})
+    end
+end
 
-            -- update buy page cache
-            for pageIndex, orderList in pairs(updatedPages[itemName].foundBuyPages) do
-                itemPageCache.buyPages[tonumber(pageIndex)] = orderList
-                itemPageCache.buyPages[tonumber(pageIndex)].pageAge = DateTime.now().UnixTimestamp
-            end
+function Utility.UpdateItemOrderHistorySend()
+    -- put our request info onto the RequestQueue
+    local url = serverAddress .. endpoints["getItemOrderHistories"]
+    local body = nil
+    table.insert(Utility.RequestQueue, {
+        ["url"] = url, 
+        ["body"] = body,
+        ["requestType"] = "GET",
+        ["receiver"] = Utility.UpdateItemOrderHistoryReceieve,
+        ["requestingPlayer"] = nil
+    })
+end
 
-            -- update sell page cache
-            for pageIndex, orderList in pairs(updatedPages[itemName].foundSellPages) do
-                itemPageCache.sellPages[tonumber(pageIndex)] = orderList
-                itemPageCache.sellPages[tonumber(pageIndex)].pageAge = DateTime.now().UnixTimestamp
-            end
+function Utility.UpdateItemOrderHistoryReceieve(responseInfo)
+    updateClientItemOrderHistories:FireAllClients(responseInfo.responseData)
+end
+
+function Utility.UpdateOrderStatusSend()
+    -- TODO: send list of entire transaction instead of just IDs
+        -- then on Java backend only return transactions which are out of date
+    local orderIdList = {}
+    local listIsEmpty = true
+    for userId, data in pairs(Utility.GlobalPlayerDataTable) do
+        local playerPendingOrderIds = {}
+        for orderId, transaction in pairs(data.pendingPlayerOrders) do 
+            table.insert(playerPendingOrderIds, transaction.transactionId)
         end
 
-        -- send updated pages to clients
-        for _, player in Players:GetPlayers() do
-            local playerViewingPages = Utility.PlayerViewingPages[player.userId]
-            if not playerViewingPages then
+        if #playerPendingOrderIds ~= 0 then
+            orderIdList[userId] = playerPendingOrderIds
+            listIsEmpty = false
+        end
+    end
+
+    if listIsEmpty then
+        return
+    end
+    
+    -- put our request info onto the RequestQueue
+    local url = serverAddress .. endpoints["getOrderStatus"]
+    local body = orderIdList
+    table.insert(Utility.RequestQueue, {
+        ["url"] = url, 
+        ["body"] = body,
+        ["requestType"] = "POST",
+        ["receiver"] = Utility.UpdateOrderStatusReceive,
+        ["requestingPlayer"] = nil
+    })
+end
+
+function Utility.UpdateOrderStatusReceive(responseInfo)
+    local playerPendingOrders = responseInfo.responseData
+    for userId, transactionList in pairs(playerPendingOrders) do
+        userId = tonumber(userId)
+        local player = Players:GetPlayerByUserId(userId)
+        local playerData = Utility.GlobalPlayerDataTable[userId]
+        local oldPlayerOrders = playerData.pendingPlayerOrders
+        for _, updatedTransaction in ipairs(transactionList) do
+            if oldPlayerOrders[updatedTransaction.transactionId] == nil then
+                -- order was canceled
                 continue
             end
 
-            local itemType = playerViewingPages.itemType
-            local itemName = SharedUtility.ItemTypeLookup[itemType]
-            local buyPageIndex = Utility.PlayerViewingPages[player.userId].buyPageIndex
-            local sellPageIndex = Utility.PlayerViewingPages[player.userId].sellPageIndex
-            local buyPage = Utility.PageCache[itemName].buyPages[buyPageIndex]
-            local sellPage = Utility.PageCache[itemName].sellPages[sellPageIndex]
-            updateClientPages:FireClient(player, itemType, buyPageIndex, sellPageIndex, {buyPage, sellPage})
+            local newQuantity = updatedTransaction.remainingQuantity
+            local oldQuantity = oldPlayerOrders[updatedTransaction.transactionId].remainingQuantity
+            local quantityDiff = oldQuantity - newQuantity
+            if quantityDiff == 0 then
+                -- order status has not changed
+                continue
+            end
+
+            local earnedCurrency = quantityDiff * updatedTransaction.price
+            local earnedItemQuantity = quantityDiff
+            if SharedUtility.TransactionType[updatedTransaction.transactionType] == SharedUtility.TransactionType.BuyOrder then
+                earnedCurrency = 0
+            else
+                earnedItemQuantity = 0
+            end
+
+            local itemName = updatedTransaction.itemType
+            if updatedTransaction.remainingQuantity == 0 then
+                -- transaction has been fulfilled and must be deleted
+                Utility.RemovePlayerOrder(userId, updatedTransaction.transactionId)
+            else
+                updatedTransaction.itemType = SharedUtility.ItemType[itemName]
+                Utility.GlobalPlayerDataTable[userId].pendingPlayerOrders[updatedTransaction.transactionId] = updatedTransaction
+            end
+            
+            Utility.UpdatePlayerData(player, earnedCurrency, {[itemName] = earnedItemQuantity})
         end
     end
 end
 
-function Utility.UpdateItemOrderHistories()
-    local httpSuccess, response = pcall(function() 
-        return HttpService:RequestAsync({
-            Url = serverAddress..endpoints["getItemOrderHistories"],
-            Method = "GET",
-            Headers = {
-                ["Content-Type"] = "application/json",
-            }
-        })
-    end)
+function Utility.MarketFillOrder(player, itemType, transactionType, desiredQuantity, partialFill)
+    -- TODO: how to handle self-fill? skip over these orders?
+    local ownerId = player.UserId
+    local ownerName = player.DisplayName or player.Name
+    local playerData = Utility.GlobalPlayerDataTable[ownerId]
+    local playerFunds = playerData.currency
+    local itemName = SharedUtility.ItemTypeLookup[itemType]
+    local itemCount = playerData.inventory[itemName]
+    local unformattedQuantity = tonumber(desiredQuantity)
+    if (not unformattedQuantity) then
+        return {statusCode = -1, message = "Quantity must be a positive integer."}
+    end
+    
+    local quantity = math.floor(unformattedQuantity + 0.5)
 
-    if httpSuccess then
-        local jsonSuccess, itemOrderHistories = pcall(function() 
-            return HttpService:JSONDecode(response.Body)
-        end)
+    -- validate quantity
+    if quantity <= 0 then
+        return {statusCode = -1, message = "Quantity must be a positive integer."}
+    end
 
-        if jsonSuccess then
-            updateClientItemOrderHistories:FireAllClients(itemOrderHistories)
+    -- we must flip the order type since we are filling, not placing
+    local orderFillType = nil
+    if transactionType == SharedUtility.TransactionType.BuyOrder then
+        orderFillType = SharedUtility.TransactionType.SellOrder
+    elseif transactionType == SharedUtility.TransactionType.SellOrder then
+        orderFillType = SharedUtility.TransactionType.BuyOrder
+
+        if (desiredQuantity > itemCount) then
+            return {statusCode = -1, message = "You do not have enough of " .. itemName .. " to complete this market order."}
         end
     end
-end
 
-function Utility.GetPlayerOrderCount(player)
-    -- TODO: instead have an integer and update it whenever we add/remove orders
-    local playerData = Utility.GlobalPlayerDataTable[player.UserId]
-    local playerPendingOrdersTable = playerData.pendingPlayerOrders
-    local orderCount = 0
-    for _, order in pairs(playerPendingOrdersTable) do
-        orderCount += 1
+    -- if playerData.orderProcessing then
+    --     return {statusCode = -1, message = "Could not fill market order: your previous request is still processing..."}
+    -- else
+    --     playerData.orderProcessing = true
+    -- end
+    local responseInfo = Utility.PlayerResponseQueue[player]
+    if responseInfo ~= nil then
+        return {statusCode = -1, message = "Could not fill market order: your previous request is still processing..."}
+    else
+        Utility.PlayerResponseQueue[player] = true
     end
 
-    return orderCount
-end
+    local validatedOrderDetails = {
+        ownerId = tostring(ownerId),
+        ownerName = ownerName,
+        desiredQuantity = tostring(desiredQuantity),
+        itemType = tostring(itemType),
+        transactionType = tostring(orderFillType),
+        availableFunds = tostring(playerFunds),
+        partialFill = false
+        -- partialFill = partialFill and "true" or "false"
+    }
 
-function Utility.RemovePlayerOrder(playerId, transactionId)
-    local playerData = Utility.GlobalPlayerDataTable[playerId]
-    local playerPendingOrdersTable = playerData.pendingPlayerOrders
-    playerPendingOrdersTable[transactionId] = nil
+    -- put our request info onto the RequestQueue
+    local url = serverAddress .. endpoints["fillMarketOrder"]
+    local body = validatedOrderDetails
+    table.insert(Utility.RequestQueue, {
+        ["url"] = url, 
+        ["body"] = body,
+        ["requestType"] = "POST",
+        ["receiver"] = Utility.UpdatePlayerResponseQueue,
+        ["requestingPlayer"] = player
+    })
+
+    -- wait until response is inserted into the PlayerResponseQueue
+    repeat 
+        responseInfo = Utility.PlayerResponseQueue[player]
+        task.wait()
+    until responseInfo ~= nil and responseInfo ~= true
+
+    responseInfo = SharedUtility.DeepCopy(responseInfo)
+    Utility.PlayerResponseQueue[player] = nil
+    
+    local responseData = responseInfo.responseData
+    if responseData then
+        local spentFunds = tonumber(responseData[1])
+        local formattedSpentFunds = math.ceil(spentFunds * 100)/100
+        if transactionType == SharedUtility.TransactionType.SellOrder then
+            formattedSpentFunds *= -1
+            desiredQuantity *= -1
+        end
+
+        Utility.UpdatePlayerData(player, -formattedSpentFunds, {[itemName] = desiredQuantity})
+        -- playerData.orderProcessing = false
+        return {statusCode = 1, message = responseData[2]}
+    end
+
+    -- playerData.orderProcessing = false
+    return {statusCode = -1, message = "MarketFillOrder Failure: HttpService error."}
 end
 
 function Utility.PlaceOrder(player, transactionDetails)
-    local costEpsilon = 0.00001
     local playerId = player.UserId
     local playerData = Utility.GlobalPlayerDataTable[playerId]
     local playerPendingOrdersTable = playerData.pendingPlayerOrders
+
     if (Utility.GetPlayerOrderCount(player) >= 10) then
         return {statusCode = -1, message = "You have reached the 10 pending order limit. Cancel an order to place another."}
     end
@@ -232,6 +390,12 @@ function Utility.PlaceOrder(player, transactionDetails)
         end
     end
 
+    if playerData.orderProcessing then
+        return {statusCode = -1, message = "Could not place order: your previous request is still processing..."}
+    else
+        playerData.orderProcessing = true
+    end
+
     local validatedTransactionDetails = {
         transactionType = transactionType,
         itemType = itemType,
@@ -242,9 +406,8 @@ function Utility.PlaceOrder(player, transactionDetails)
         ownerName = player.DisplayName or player.Name
     }
 
-    local response = nil
-    local httpSuccess, statusMessage = pcall(function() 
-        response = HttpService:RequestAsync({
+    local httpSuccess, response = pcall(function() 
+        return HttpService:RequestAsync({
             Url = serverAddress..endpoints["placeOrder"],
             Method = "POST",
             Headers = {
@@ -254,29 +417,38 @@ function Utility.PlaceOrder(player, transactionDetails)
         })
     end)
 
-    if httpSuccess and response.StatusCode == 200 then
-        local responseData = nil
-        local jsonSuccess, errorMessage = pcall(function() 
-            responseData = HttpService:JSONDecode(response.Body)
-        end)
+    if httpSuccess then
+        if response.StatusCode == 200 then
+            local responseData = nil
+            local jsonSuccess, _ = pcall(function() 
+                responseData = HttpService:JSONDecode(response.Body)
+            end)
 
-        if jsonSuccess then
-            local funds = price * quantity
-            if transactionType == SharedUtility.TransactionType.SellOrder then
-                funds = 0
-            else 
-                quantity = 0
+            if jsonSuccess then
+                local funds = price * quantity
+                if transactionType == SharedUtility.TransactionType.SellOrder then
+                    funds = 0
+                else 
+                    quantity = 0
+                end
+
+                -- update player funds/inventory and add pending transaction to player data
+                validatedTransactionDetails.transactionId = responseData.transactionId
+                validatedTransactionDetails.timestamp = responseData.timestamp
+                playerPendingOrdersTable[validatedTransactionDetails.transactionId] = validatedTransactionDetails
+                Utility.UpdatePlayerData(player, -funds, {[SharedUtility.ItemTypeLookup[itemType]] = -quantity})
+
+                playerData.orderProcessing = false
+                return {statusCode = 1, message = "Order placed successfully."}
             end
-
-            -- update player funds/inventory and add pending transaction to player data
-            validatedTransactionDetails.transactionId = responseData[1]
-            playerPendingOrdersTable[validatedTransactionDetails.transactionId] = validatedTransactionDetails
-            Utility.UpdatePlayerData(player, -funds, {[SharedUtility.ItemTypeLookup[itemType]] = -quantity})
-            return {statusCode = 1, message = responseData[2]}
+        else
+            playerData.orderProcessing = false
+            return {statusCode = -1, message = response.Body}
         end
     end
 
-    return {statusCode = -1, message = response.Body}
+    playerData.orderProcessing = false
+    return {statusCode = -1, message = "Failed to place order: HttpService error."}
 end
 
 function Utility.UpdatePlayerData(player, fundsIncrement, inventoryIncrements)
@@ -287,7 +459,6 @@ function Utility.UpdatePlayerData(player, fundsIncrement, inventoryIncrements)
         Utility.GlobalPlayerDataTable[playerId].inventory[itemName] += itemQuantity
     end
 
-    -- print(Utility.GlobalPlayerDataTable[playerId])
     playerDataUpdate:FireClient(player, Utility.GlobalPlayerDataTable[playerId])
 end
 
@@ -321,6 +492,12 @@ function Utility.FillOrder(player, transactionId, desiredQuantity, price, transa
         end
     end
 
+    if playerData.orderProcessing then
+        return {statusCode = -1, message = "Could not fill order: your previous request is still processing..."}
+    else
+        playerData.orderProcessing = true
+    end
+
     local validatedOrderDetails = {
         otherTransactionId = tostring(transactionId),
         ownerId = tostring(playerId),
@@ -328,9 +505,8 @@ function Utility.FillOrder(player, transactionId, desiredQuantity, price, transa
         desiredQuantity = tostring(desiredQuantity)
     }
 
-    local response = nil
-    local httpSuccess, statusMessage = pcall(function() 
-        response = HttpService:RequestAsync({
+    local httpSuccess, response = pcall(function() 
+        return HttpService:RequestAsync({
             Url = serverAddress..endpoints["fillLimitOrder"],
             Method = "POST",
             Headers = {
@@ -340,101 +516,38 @@ function Utility.FillOrder(player, transactionId, desiredQuantity, price, transa
         })
     end)
 
-    if httpSuccess and response.StatusCode == 200 then
-        local funds = price * desiredQuantity
-        local formattedFunds = math.ceil(funds * 100)/100
-        if transactionType == SharedUtility.TransactionType.Sell then
-            formattedFunds *= -1
-        else 
-            desiredQuantity *= -1
-        end
-
-        -- update player funds/inventory and add pending transaction to player data
-        Utility.UpdatePlayerData(player, -formattedFunds, {[SharedUtility.ItemTypeLookup[itemType]] = -desiredQuantity})
-        return {statusCode = 1, message = response.Body}
-    end
-
-    return {statusCode = -1, message = response.Body}
-end
-
-function Utility.MarketFillOrder(player, itemType, transactionType, desiredQuantity, partialFill)
-    -- TODO: how to handle self-fill? skip over these orders?
-    local ownerId = player.UserId
-    local ownerName = player.DisplayName or player.Name
-    local playerFunds = Utility.GlobalPlayerDataTable[ownerId].currency
-    local itemName = SharedUtility.ItemTypeLookup[itemType]
-    local itemCount = Utility.GlobalPlayerDataTable[ownerId].inventory[itemName]
-    local unformattedQuantity = tonumber(desiredQuantity)
-    if (not unformattedQuantity) then
-        return {statusCode = -1, message = "Quantity must be a positive integer."}
-    end
-    
-    local quantity = math.floor(unformattedQuantity + 0.5)
-
-    -- validate quantity
-    if quantity <= 0 then
-        return {statusCode = -1, message = "Quantity must be a positive integer."}
-    end
-
-    -- we must flip the order type since we are filling, not placing
-    local orderFillType = nil
-    if transactionType == SharedUtility.TransactionType.BuyOrder then
-        orderFillType = SharedUtility.TransactionType.SellOrder
-    elseif transactionType == SharedUtility.TransactionType.SellOrder then
-        orderFillType = SharedUtility.TransactionType.BuyOrder
-
-        if (desiredQuantity > itemCount) then
-            return {statusCode = -1, message = "You do not have enough of " .. itemName .. " to complete this market order."}
-        end
-    end
-
-    local validatedOrderDetails = {
-        ownerId = tostring(ownerId),
-        ownerName = ownerName,
-        desiredQuantity = tostring(desiredQuantity),
-        itemType = tostring(itemType),
-        transactionType = tostring(orderFillType),
-        availableFunds = tostring(playerFunds),
-        partialFill = false
-        -- partialFill = partialFill and "true" or "false"
-    }
-
-    local response = nil
-    local httpSuccess, statusMessage = pcall(function() 
-        response = HttpService:RequestAsync({
-            Url = serverAddress..endpoints["fillMarketOrder"],
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-            },
-            Body = HttpService:JSONEncode(validatedOrderDetails)
-        })    
-    end)
-
     if httpSuccess then
-        local responseData = nil
-        local jsonSuccess, errorMessage = pcall(function() 
-            responseData = HttpService:JSONDecode(response.Body)
-        end)
-            
-        if jsonSuccess and response.StatusCode == 200 then
-            local spentFunds = tonumber(responseData[1])
-            local formattedSpentFunds = math.ceil(spentFunds * 100)/100
-            if transactionType == SharedUtility.TransactionType.SellOrder then
-                formattedSpentFunds *= -1
+        if response.StatusCode == 200 then
+            local funds = price * desiredQuantity
+            local formattedFunds = math.ceil(funds * 100)/100
+            if transactionType == SharedUtility.TransactionType.Sell then
+                formattedFunds *= -1
+            else 
                 desiredQuantity *= -1
             end
 
-            Utility.UpdatePlayerData(player, -formattedSpentFunds, {[itemName] = desiredQuantity})
-            return {statusCode = 1, message = responseData[2]}
+            -- update player funds/inventory and add pending transaction to player data
+            Utility.UpdatePlayerData(player, -formattedFunds, {[SharedUtility.ItemTypeLookup[itemType]] = -desiredQuantity})
+            playerData.orderProcessing = false
+            return {statusCode = 1, message = response.Body}
+        else 
+            return {statusCode = -1, message = response.Body}
         end
     end
 
-    return {statusCode = -1, message = response.Body}
+    playerData.orderProcessing = false
+    return {statusCode = -1, message = "Failed to fill order: HttpService error."}
 end
 
 function Utility.CancelOrder(player, transactionId)
     local playerId = player.UserId
+    local playerData = Utility.GlobalPlayerDataTable[playerId]
+
+    if playerData.orderProcessing then
+        return {statusCode = -1, message = "Could not cancel order: your previous request is still processing..."}
+    else
+        playerData.orderProcessing = true
+    end
 
     local cancelDetails = {
         transactionId = tostring(transactionId),
@@ -472,100 +585,15 @@ function Utility.CancelOrder(player, transactionId)
                 returnedQuantity = 0
             end
 
-            print(canceledTransaction.remainingQuantity)
             Utility.RemovePlayerOrder(playerId, transactionId)
             Utility.UpdatePlayerData(player, returnedFunds, {[itemName] = returnedQuantity})
+            playerData.orderProcessing = false
             return {statusCode = 1, message = responseData[2]}
         end
     end
 
-    return {statusCode = -1, message = response.Body}
-end
-
-function Utility.UpdateOrderStatus()
-    -- TODO: send list of entire transaction instead of just IDs
-        -- then on Java backend only return transactions which are out of date
-    local orderIdList = {}
-    local listIsEmpty = true
-    for userId, data in pairs(Utility.GlobalPlayerDataTable) do
-        local playerPendingOrderIds = {}
-        for orderId, transaction in pairs(data.pendingPlayerOrders) do 
-            table.insert(playerPendingOrderIds, transaction.transactionId)
-        end
-
-        if #playerPendingOrderIds ~= 0 then
-            orderIdList[userId] = playerPendingOrderIds
-            listIsEmpty = false
-        end
-    end
-
-    if listIsEmpty then
-        return
-    end
-    
-    local response = nil
-    local httpSuccess, statusMessage = pcall(function() 
-        response = HttpService:RequestAsync({
-            Url = serverAddress..endpoints["getOrderStatus"],
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-            },
-            Body = HttpService:JSONEncode(orderIdList)
-        })
-    end)
-
-    if httpSuccess and response.StatusCode == 200 then
-        local responseData = nil
-        local jsonSuccess, errorMessage = pcall(function() 
-            responseData = HttpService:JSONDecode(response.Body)
-        end)
-
-        if jsonSuccess then
-            local playerPendingOrders = responseData
-            for userId, transactionList in pairs(playerPendingOrders) do
-                userId = tonumber(userId)
-                local player = Players:GetPlayerByUserId(userId)
-                local playerData = Utility.GlobalPlayerDataTable[userId]
-                local oldPlayerOrders = playerData.pendingPlayerOrders
-                for _, updatedTransaction in ipairs(transactionList) do
-                    if oldPlayerOrders[updatedTransaction.transactionId] == nil then
-                        -- order was canceled
-                        continue
-                    end
-
-                    local newQuantity = updatedTransaction.remainingQuantity
-                    local oldQuantity = oldPlayerOrders[updatedTransaction.transactionId].remainingQuantity
-                    local quantityDiff = oldQuantity - newQuantity
-                    if quantityDiff == 0 then
-                        -- order status has not changed
-                        continue
-                    end
-                    print(updatedTransaction.transactionType)
-                    local earnedCurrency = quantityDiff * updatedTransaction.price
-                    local earnedItemQuantity = quantityDiff
-                    if SharedUtility.TransactionType[updatedTransaction.transactionType] == SharedUtility.TransactionType.BuyOrder then
-                        earnedCurrency = 0
-                    else
-                        earnedItemQuantity = 0
-                    end
-
-                    local itemName = updatedTransaction.itemType
-                    if updatedTransaction.remainingQuantity == 0 then
-                        -- transaction has been fulfilled and must be deleted
-                        Utility.RemovePlayerOrder(userId, updatedTransaction.transactionId)
-                    else
-                        updatedTransaction.itemType = SharedUtility.ItemType[itemName]
-                        Utility.GlobalPlayerDataTable[userId].pendingPlayerOrders[updatedTransaction.transactionId] = updatedTransaction
-                    end
-                    
-                    Utility.UpdatePlayerData(player, earnedCurrency, {[itemName] = earnedItemQuantity})
-                end
-            end
-        end
-    end
-
-    return {statusCode = -1, message = response.Body}
+    playerData.orderProcessing = false
+    return {statusCode = -1, message = "Failed to cancel order: HttpService error."}
 end
 
 return Utility

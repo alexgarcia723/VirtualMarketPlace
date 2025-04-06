@@ -101,8 +101,7 @@ local currentlyFocusedOrderLine = nil
 local UnselectedColor = Color3.fromRGB(60, 118, 193)
 local SelectedColor = Color3.fromRGB(79, 158, 255)
 local viewingMarketplace = marketplaceUI.Enabled
--- method pre-declarations
-local UpdateItemSelection
+
 
 local function WipeOrderLine(orderLine)
     -- reset order line to a blank state
@@ -112,6 +111,22 @@ local function WipeOrderLine(orderLine)
     orderLine:SetAttribute("TransactionId", nil)
     orderLine:SetAttribute("Price", nil)
     orderLine:SetAttribute("RemainingQuantity", nil)
+end
+
+local function GetTimeDisplay(currentTimeUnixMilliseconds, otherTimeUnixMilliseconds)
+    local timediffSeconds= currentTimeUnixMilliseconds.UnixTimestamp - otherTimeUnixMilliseconds.UnixTimestamp
+    local timeDiffObj = DateTime.fromUnixTimestamp(timediffSeconds):ToUniversalTime()
+    local timeDiffMins = timeDiffObj.Minute
+
+    if timeDiffMins < 1 then
+        return "< 1 min"
+    elseif timeDiffMins < 60 then
+        return timeDiffObj.Minute .. " mins"
+    elseif timeDiffMins < 1440 then
+        return timeDiffObj.Hour .. " hours"
+    else
+        return timeDiffObj.Day .. " days"
+    end
 end
 
 local function UpdateOrderPages(updateItemType, receivedBuyPageIndex, receivedSellPageIndex, orderPages)
@@ -141,7 +156,7 @@ local function UpdateOrderPages(updateItemType, receivedBuyPageIndex, receivedSe
         if buyOrder and receivedBuyPageIndex == buyPageIndex then
             buyOrderLine.OwnerIdLabel.Text = buyOrder.ownerName and buyOrder.ownerName or "DefaultMerchantID"
             buyOrderLine.QuantityLabel.Text = buyOrder.remainingQuantity.."/"..buyOrder.originalQuantity
-            buyOrderLine.PriceLabel.Text = buyOrder.price
+            buyOrderLine.PriceLabel.Text = string.format("%.2f", buyOrder.price)
             buyOrderLine:SetAttribute("TransactionId", buyOrder.transactionId)
             buyOrderLine:SetAttribute("Price", buyOrder.price)
             buyOrderLine:SetAttribute("RemainingQuantity", buyOrder.remainingQuantity)
@@ -154,7 +169,7 @@ local function UpdateOrderPages(updateItemType, receivedBuyPageIndex, receivedSe
         if sellOrder and receivedSellPageIndex == sellPageIndex then
             sellOrderLine.OwnerIdLabel.Text = sellOrder.ownerName and sellOrder.ownerName or "DefaultMerchantID"
             sellOrderLine.QuantityLabel.Text = sellOrder.remainingQuantity.."/"..sellOrder.originalQuantity
-            sellOrderLine.PriceLabel.Text = sellOrder.price
+            sellOrderLine.PriceLabel.Text = string.format("%.2f", sellOrder.price)
             sellOrderLine:SetAttribute("TransactionId", sellOrder.transactionId)
             sellOrderLine:SetAttribute("Price", sellOrder.price)
             sellOrderLine:SetAttribute("RemainingQuantity", sellOrder.remainingQuantity)
@@ -242,11 +257,12 @@ end
 
 local function DisplayOrderPlaceConfirmation()
     if PlaceOrderDetailsValid() then 
-        placeOrderConfirmationFrame.OrderItemLabel.Text = "Order Item: " .. selectedItemType
+        placeOrderConfirmationFrame.OrderItemLabel.Text = "Order Item: " .. SharedUtility.ItemTypeLookup[selectedItemType]
         placeOrderConfirmationFrame.OrderTypeLabel.Text = "Order Type: " .. SharedUtility.TransactionTypeLookup[selectedTransactionType]
         placeOrderConfirmationFrame.OrderPriceLabel.Text = "Order Price: " .. placeOrderPriceTextbox.Text
         placeOrderConfirmationFrame.OrderQuantityLabel.Text = "Order Quantity: " .. placeOrderQuantityTextbox.Text
         placeOrderConfirmationFrame.Visible = true
+        mainPane.Interactable = false
     else
         -- display some sort of error message
     end
@@ -269,11 +285,13 @@ local function ConfirmPlaceOrder()
         end
 
         placeOrderConfirmationFrame.Visible = false
+        mainPane.Interactable = true
     end
 end
 
 local function CancelPlaceOrder()
     placeOrderConfirmationFrame.Visible = false
+    mainPane.Interactable = true
 end
 
 local function DisplayOrderFillConfirmation(orderLine)
@@ -366,74 +384,6 @@ local function RemoveFulfilledOrders(transactionList)
     end
 end
 
-local function SubmitOrderCancelRequest(orderLine)
-    local transactionId = orderLine:GetAttribute("TransactionId")
-    local result = requestCancelOrder:InvokeServer(transactionId)
-
-    if result.statusCode ~= -1 then
-        orderLine:Destroy()
-        UpdateItemSelection(SharedUtility.ItemTypeLookup[selectedItemType])
-    else 
-        -- could not cancel order: display error message 
-    end
-end
-
-
-local function UpdateOrderUI(data)
-    SharedUtility.LocalPlayerData = data
-
-    -- update currency
-    currencyFrame.CurrencyLabel.Text = string.format("$%.2f", data.currency)
-
-    -- update pending transactions
-    local pendingPlayerOrders = data.pendingPlayerOrders
-    for _, transaction in pairs(pendingPlayerOrders) do
-        local orderLine = transactionContainer.OrdersList:FindFirstChild(transaction.transactionId) 
-        if not orderLine then 
-            orderLine = pendingOrderTemplateFrame:Clone()
-            orderLine.TypeFrame.CancelButton.MouseButton1Click:Connect(function() 
-                SubmitOrderCancelRequest(orderLine) 
-            end)
-        end
-
-        local itemName = SharedUtility.ItemTypeLookup[transaction.itemType]
-        orderLine.Name = transaction.transactionId
-        orderLine.ItemFrame.ItemLabel.Text = itemName
-        orderLine.ItemFrame.ImageLabel.Image = SharedUtility.ItemTypeIcons[itemName]
-        orderLine.PriceLabel.Text = transaction.price
-        orderLine.QuantityLabel.Text = transaction.remainingQuantity .. "/" .. transaction.originalQuantity
-        orderLine.TimeLabel.Text = "---"
-
-        if transaction.transactionType == SharedUtility.TransactionType.BuyOrder then
-            orderLine.TypeFrame.BuyLabel.Visible = true
-        else
-            orderLine.TypeFrame.SellLabel.Visible = true
-        end
-
-        orderLine.Visible = true
-        orderLine:SetAttribute("TransactionId", transaction.transactionId)
-        orderLine.Parent = transactionContainer.OrdersList
-    end
-
-    RemoveFulfilledOrders(data.pendingPlayerOrders)
-end
-
-local function GetTimeDisplay(currentTimeUnixMilliseconds, otherTimeUnixMilliseconds)
-    local timediffSeconds= currentTimeUnixMilliseconds.UnixTimestamp - otherTimeUnixMilliseconds.UnixTimestamp
-    local timeDiffObj = DateTime.fromUnixTimestamp(timediffSeconds):ToUniversalTime()
-    local timeDiffMins = timeDiffObj.Minute
-
-    if timeDiffMins < 1 then
-        return "< 1 min"
-    elseif timeDiffMins < 60 then
-        return timeDiffObj.Minute .. " mins"
-    elseif timeDiffMins < 1440 then
-        return timeDiffObj.Hour .. " hours"
-    else
-        return timeDiffObj.Day .. " days"
-    end
-end
-
 local function UpdateItemOrderHistories(itemOrderHistoryData)
     if itemOrderHistoryData ~= nil then
         SharedUtility.ClientOrderHistories = itemOrderHistoryData
@@ -494,6 +444,60 @@ local function UpdateItemSelection(itemName)
     updateServerViewingPages:FireServer(selectedItemType, buyPageIndex, sellPageIndex, viewingMarketplace)
     UpdateItemOrderHistories()
 
+end
+
+local function SubmitOrderCancelRequest(orderLine)
+    local transactionId = orderLine:GetAttribute("TransactionId")
+    local result = requestCancelOrder:InvokeServer(transactionId)
+
+    if result.statusCode ~= -1 then
+        orderLine:Destroy()
+        UpdateItemSelection(SharedUtility.ItemTypeLookup[selectedItemType])
+    else 
+        -- could not cancel order: display error message 
+        task.spawn(SharedUtility.DisplayErrorMessage, result.message, errorLabel)
+    end
+end
+
+local function UpdateOrderUI(data)
+    SharedUtility.LocalPlayerData = data
+
+    -- update currency
+    currencyFrame.CurrencyLabel.Text = string.format("$%.2f", data.currency)
+
+    -- update pending transactions
+    local pendingPlayerOrders = data.pendingPlayerOrders
+    for _, transaction in pairs(pendingPlayerOrders) do
+        local orderLine = transactionContainer.OrdersList:FindFirstChild(transaction.transactionId) 
+        if not orderLine then 
+            orderLine = pendingOrderTemplateFrame:Clone()
+            orderLine.TypeFrame.CancelButton.MouseButton1Click:Connect(function() 
+                SubmitOrderCancelRequest(orderLine) 
+            end)
+        end
+
+        local itemName = SharedUtility.ItemTypeLookup[transaction.itemType]
+        orderLine.Name = transaction.transactionId
+        orderLine.ItemFrame.ItemLabel.Text = itemName
+        orderLine.ItemFrame.ImageLabel.Image = SharedUtility.ItemTypeIcons[itemName]
+        orderLine.PriceLabel.Text = transaction.price
+        orderLine.QuantityLabel.Text = transaction.remainingQuantity .. "/" .. transaction.originalQuantity
+
+        local currentTime = DateTime.now()
+        orderLine.TimeLabel.Text = GetTimeDisplay(currentTime, DateTime.fromIsoDate(transaction.timestamp))
+
+        if transaction.transactionType == SharedUtility.TransactionType.BuyOrder then
+            orderLine.TypeFrame.BuyLabel.Visible = true
+        else
+            orderLine.TypeFrame.SellLabel.Visible = true
+        end
+
+        orderLine.Visible = true
+        orderLine:SetAttribute("TransactionId", transaction.transactionId)
+        orderLine.Parent = transactionContainer.OrdersList
+    end
+
+    RemoveFulfilledOrders(data.pendingPlayerOrders)
 end
 
 local function InitializeItemSelectPane()
@@ -580,7 +584,6 @@ marketOrderBuyButton.MouseButton1Click:Connect(function() PlaceMarketOrder(Share
 marketOrderSellButton.MouseButton1Click:Connect(function() PlaceMarketOrder(SharedUtility.TransactionType.SellOrder) end)
 placeOrderButton.MouseButton1Click:Connect(DisplayOrderPlaceConfirmation)
 selectOrderItemButton.MouseButton1Click:Connect(DisplaySelectOrderItem)
-currencyFrame.InventoryButton.MouseButton1Click:Connect(DisplaySelectOrderItem)
 marketplaceUI:GetPropertyChangedSignal("Enabled"):Connect(UpdateMarketplaceViewingStatus)
 
 -- remote events
