@@ -15,7 +15,7 @@ public abstract class Transaction {
 	protected int originalQuantity;
 	protected int remainingQuantity;
 	protected double price;
-	protected int ownerId;
+	protected String ownerId;
 	protected String ownerName;
 	protected Timestamp timestamp = new Timestamp((new Date()).getTime());
 	@Id
@@ -29,7 +29,6 @@ public abstract class Transaction {
 	public void setTimestamp(Timestamp timestamp) {
 		this.timestamp = timestamp;
 	}
-	
 	
 	@Column(name = "ownerName", nullable = true)
 	public String getOwnerName() {
@@ -86,11 +85,11 @@ public abstract class Transaction {
 	}
 
 	@Column(name = "ownerId", nullable = false)
-	public int getOwnerId() {
+	public String getOwnerId() {
 		return ownerId;
 	}
 
-	public void setOwnerId(int ownerId) {
+	public void setOwnerId(String ownerId) {
 		this.ownerId = ownerId;
 	}
 

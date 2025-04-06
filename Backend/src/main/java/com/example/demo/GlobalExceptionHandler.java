@@ -14,22 +14,26 @@ public class GlobalExceptionHandler {
 	
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<String> handleInvalidTransaction(HttpMessageNotReadableException ex) {
+    	System.out.println(ex.getMessage());
 	    return ResponseEntity.badRequest().body(ex.getMessage());
 	}
 	
 	@ExceptionHandler({MissingServletRequestParameterException.class, IllegalArgumentException.class})
 	public ResponseEntity<String> hanleInvalidPageAccess(Exception ex) {
+    	System.out.println(ex.getMessage());
 		return ResponseEntity.badRequest().body(ex.getMessage());
 	}
 	
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> handleOtherExceptions(IllegalStateException ex) {
+    	System.out.println(ex.getMessage());
     	return ResponseEntity.badRequest().body(ex.getMessage());
     }
 	
 	// handles any other uncaught exceptions from our Controller class
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleOtherExceptions(Exception ex) {
-    	return ResponseEntity.badRequest().body("Unknown exception occured: " + ex.getMessage());
+    	System.out.println(ex.getMessage());
+    	return ResponseEntity.badRequest().body(ex.getMessage());
     }
 }

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.google.gson.Gson; // can use jackson ObjectMapper() instead
+import com.google.gson.Gson; // can use jackson ObjectMapper() instead?
 import com.google.gson.internal.LinkedTreeMap;
 
 import jakarta.validation.Valid;
@@ -43,25 +43,28 @@ public class TransactionController {
 	}
 	
 	@PostMapping("/placeOrder")
-	public ResponseEntity<String[]> PlaceOrder(@Valid @RequestBody OrderTransaction transactionDetails) {
+	public ResponseEntity<OrderTransaction> PlaceOrder(@Valid @RequestBody OrderTransaction transactionDetails) {
 		// accepts HTTP requests with JSON describing order to place and returns orderId of placed order + success message
 			
-		UUID orderId = transactionService.PlaceOrder(transactionDetails);
-		return ResponseEntity.ok().body(new String[]{String.valueOf(orderId), "Order placed successfully."});
+		OrderTransaction placedOrder = transactionService.PlaceOrder(transactionDetails);
+		return ResponseEntity.ok().body(placedOrder);
 	}
 
 	@PostMapping(path = "/fillMarketOrder", consumes = "application/json")
 	public ResponseEntity<String[]> FillMarketOrder(@RequestBody String jsonBody) {
 		// accepts HTTP requests with JSON describing market order request parameters and returns spent funds amount + success/failure message
 		
+		System.out.println(jsonBody);
+
 		// get our values from the user's JSON and convert them to the correct types to pass to TransactionService
 		HashMap<String, String> orderDetails = gson.fromJson(jsonBody, HashMap.class);
 		int itemTypeIndex =  Integer.valueOf(orderDetails.get("itemType").toString());
 		int transactionTypeIndex =  Integer.valueOf(orderDetails.get("transactionType").toString());
 		int desiredQuantity = Integer.valueOf(orderDetails.get("desiredQuantity").toString());
-		int ownerId = Integer.valueOf(orderDetails.get("ownerId"));
+		String ownerId = String.valueOf(orderDetails.get("ownerId"));
 		String ownerName = String.valueOf(orderDetails.get("ownerName"));
 		double availableFunds = Double.valueOf(orderDetails.get("availableFunds"));
+		
 		
 		double spentFunds = transactionService.FillMarketOrder(itemTypeIndex, transactionTypeIndex, desiredQuantity, ownerId, ownerName, availableFunds);
 		return ResponseEntity.ok().body(new String[]{String.valueOf(spentFunds), "Order fulfilled successfully."});
@@ -75,7 +78,7 @@ public class TransactionController {
 		HashMap<String, String> orderDetails = gson.fromJson(jsonBody, HashMap.class);
 		UUID otherTransactionId = UUID.fromString(orderDetails.get("otherTransactionId").toString());
 		int desiredQuantity = Integer.valueOf(orderDetails.get("desiredQuantity").toString());
-		int ownerId = Integer.valueOf(orderDetails.get("ownerId"));
+		String ownerId = String.valueOf(orderDetails.get("ownerId"));
 		String ownerName = String.valueOf(orderDetails.get("ownerName"));
 		
 		transactionService.FillLimitOrder(otherTransactionId, desiredQuantity, ownerId, ownerName);
@@ -84,8 +87,7 @@ public class TransactionController {
  	
 	@PostMapping(path = "/getPages")
 	public ResponseEntity<HashMap<String, HashMap<String, HashMap<Integer, List<OrderTransaction>>>>> GetItemOrderPages(@RequestBody String jsonBody) {
-		// accepts HTTP requests with input dictionary representing the requested page indices and returns such pages from DB
-
+		// accepts HTTP requests with input dictionary representing the requested page indices and returns such pages from DB		
 		HashMap<String, LinkedTreeMap<String, List<Number>>> requestedPages = gson.fromJson(jsonBody, HashMap.class);
 		HashMap<String, HashMap<String, HashMap<Integer, List<OrderTransaction>>>> buySellOrderPages = transactionService.GetItemOrderPages(requestedPages);
 		return ResponseEntity.ok().body(buySellOrderPages); 
@@ -96,7 +98,7 @@ public class TransactionController {
 		// accepts HTTP requests with JSON describing order to cancel and returns the order we canceled + success message
 		HashMap<String, String> orderDetails = gson.fromJson(jsonBody, HashMap.class);
 		UUID transactionID =  UUID.fromString(orderDetails.get("transactionId").toString());
-		int ownerId = Integer.valueOf(orderDetails.get("ownerId"));
+		String ownerId = String.valueOf(orderDetails.get("ownerId"));
 		OrderTransaction canceledTransaction = transactionService.CancelOrder(transactionID, ownerId);
 		String orderJson = gson.toJson(canceledTransaction);
 		

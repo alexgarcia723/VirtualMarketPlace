@@ -27,7 +27,7 @@ public class FulfillmentTransaction extends Transaction {
 	public FulfillmentTransaction() {
 	}
 
-	public FulfillmentTransaction(TransactionType transactionType, ItemType itemType, int originalQuantity, double price, int ownerId, OrderTransaction otherTransaction) {
+	public FulfillmentTransaction(TransactionType transactionType, ItemType itemType, int originalQuantity, double price, String ownerId, OrderTransaction otherTransaction) {
 		this.transactionType = transactionType;
 		this.itemType = itemType;
 		this.originalQuantity = originalQuantity;
@@ -36,7 +36,7 @@ public class FulfillmentTransaction extends Transaction {
 		this.otherTransaction = otherTransaction;
 	}
 	
-	public FulfillmentTransaction(int fulfilledQuantity, int ownerId, String ownerName, OrderTransaction otherTransaction) {
+	public FulfillmentTransaction(int fulfilledQuantity, String ownerId, String ownerName, OrderTransaction otherTransaction) {
 		if (otherTransaction.getTransactionType() == TransactionType.SellOrder) {
 			this.transactionType = TransactionType.Buy;
 		} else if (otherTransaction.getTransactionType() == TransactionType.BuyOrder) {

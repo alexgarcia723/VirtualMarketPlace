@@ -24,6 +24,7 @@ public class TransactionService {
 	static private final TransactionType buyOrderType = TransactionType.BuyOrder;
 	static private final TransactionType sellOrderType = TransactionType.SellOrder;
 	static private int ordersPerPage = 10;
+	static private double mandatorySpread = 0.5;
 	
 	private final TransactionRepository transactionRepository;
 
@@ -32,7 +33,7 @@ public class TransactionService {
 		this.transactionRepository = transactionRepository;
 	}
 
-	public UUID PlaceOrder(OrderTransaction transactionDetails) {
+	public OrderTransaction PlaceOrder(OrderTransaction transactionDetails) {
 		// this method adds a new buy/sell order to PendingTransactions table
 		if (transactionDetails.getPrice() <= 0) {
 			throw new IllegalStateException("Price must be greater than 0");
@@ -47,13 +48,39 @@ public class TransactionService {
 			throw new IllegalStateException("Quantity value cannot be less than 0");
 		}
 
+		// do not allow placing order that violates buy/sell spread
+		Pageable sortByPriceOrder = null;
+		ItemType itemType = transactionDetails.getItemType();
+		TransactionType transactionType = transactionDetails.getTransactionType();
+		TransactionType otherTranasctionType = TransactionType.BuyOrder;
+		if (transactionType == TransactionType.BuyOrder) {
+			sortByPriceOrder = PageRequest.of(0, 1, Sort.by("price").ascending());
+			otherTranasctionType = TransactionType.SellOrder;
+		} else if (transactionType == TransactionType.SellOrder) {
+			sortByPriceOrder = PageRequest.of(0, 1, Sort.by("price").descending());
+		}
+		
+		List<OrderTransaction> topTransactions = transactionRepository.findOrderByItemTypeAndTransactionType(itemType, otherTranasctionType, sortByPriceOrder);
+		if (!topTransactions.isEmpty()) {
+			OrderTransaction topTransaction = topTransactions.get(0);
+			if (transactionType == TransactionType.BuyOrder) {
+				if (transactionDetails.getPrice() < (topTransaction.getPrice() + mandatorySpread)) {
+					throw new IllegalStateException("Order price must be at least $" + topTransaction.getPrice() + " + " + String.valueOf(mandatorySpread));
+				}
+			} else if (transactionType == TransactionType.SellOrder) {
+				if (transactionDetails.getPrice() > (topTransaction.getPrice() - mandatorySpread)) {
+					throw new IllegalStateException("Order price cannot be greater than $" + topTransaction.getPrice() + " - " + String.valueOf(mandatorySpread));
+				}
+			}
+		}
+		
 		// validation passed: save the order to the database
 		transactionRepository.save(transactionDetails);
-		return transactionDetails.getTransactionId();
+		return transactionDetails;
 	}
 
 	@Transactional
-	public double FillMarketOrder(int itemTypeIndex, int transactonTypeIndex, int desiredQuantity, int ownerId, String ownerName, double availableFunds) throws IllegalStateException {		
+	public double FillMarketOrder(int itemTypeIndex, int transactonTypeIndex, int desiredQuantity, String ownerId, String ownerName, double availableFunds) throws IllegalStateException {		
 		// this method attempts to fulfill the player's market fill request using the orders from the first page
 		ItemType itemType = itemTypes[itemTypeIndex];
 		TransactionType transactionType = transactionTypes[transactonTypeIndex];
@@ -62,9 +89,14 @@ public class TransactionService {
 			fulfillmentTransactionType = TransactionType.Sell;
 		}
 		
-		Pageable sortedByPriceAsc = PageRequest.of(0, ordersPerPage, Sort.by("price").ascending());
+		Pageable sortByPriceOrder = null;
+		if (fulfillmentTransactionType == TransactionType.Buy) {
+			sortByPriceOrder = PageRequest.of(0, ordersPerPage, Sort.by("price").ascending());
+		} else {
+			sortByPriceOrder = PageRequest.of(0, ordersPerPage, Sort.by("price").descending());
+		}
 		List<OrderTransaction> pendingTransactions = transactionRepository
-				.findOrderByItemTypeAndTransactionType(itemType, transactionType, sortedByPriceAsc);
+				.findOrderByItemTypeAndTransactionType(itemType, transactionType, sortByPriceOrder);
 		
 		double runningCost = 0;
 		int satisfiedQuantity = 0;
@@ -72,10 +104,10 @@ public class TransactionService {
 		
 		// attempt to satisfy order with items on 1st page
 		for (OrderTransaction transaction: pendingTransactions) {
-			if (transaction.getOwnerId() == ownerId) {
-				// we do not want to complete this market order with our own pending orders
-				continue;
-			}
+//			if (transaction.getOwnerId().equals(ownerId)) {
+//				// we do not want to complete this market order with our own pending orders
+//				continue;
+//			}
 			
 			double price = transaction.getPrice();
 			int remainingQuantity = transaction.getRemainingQuantity();
@@ -110,7 +142,7 @@ public class TransactionService {
 		return runningCost;
 	}
 	
-	public void FillLimitOrder(UUID otherTransactionId, int desiredQuantity, int ownerId, String ownerName) throws IllegalStateException {
+	public void FillLimitOrder(UUID otherTransactionId, int desiredQuantity, String ownerId, String ownerName) throws IllegalStateException {
 		// this method processes the player's request to fill a buy/sell order with a specific transactionId
 		Optional<OrderTransaction> optionalTransaction = transactionRepository
 				.findOrderActiveByTransactionId(otherTransactionId);
@@ -118,9 +150,9 @@ public class TransactionService {
 		if (optionalTransaction.isPresent()) {
 			OrderTransaction otherTransaction = optionalTransaction.get();
 			// check that we aren't filling our own order
-			if (ownerId == otherTransaction.getOwnerId()) {
-				throw new IllegalStateException("Request denied: you are attempting to fill your own order.");
-			}
+//			if (ownerId.equals(otherTransaction.getOwnerId())) {
+//				throw new IllegalStateException("Request denied: you are attempting to fill your own order.");
+//			}
 			
 			// check that desiredQuantity <= remaining quantity
 			if (otherTransaction.getRemainingQuantity() < desiredQuantity) {
@@ -160,10 +192,10 @@ public class TransactionService {
 			// get buy orders
 			for (Number pageIndex: buyPageIndices) {
 				// define sorting configuration
-				Pageable sortPriceAsc = PageRequest.of(pageIndex.intValue() - 1, ordersPerPage, Sort.by("price").ascending());
+				Pageable sortPriceDesc = PageRequest.of(pageIndex.intValue() - 1, ordersPerPage, Sort.by("price").descending());
 				
 				// get page from database
-				List<OrderTransaction> ordersPage = transactionRepository.findOrderByItemTypeAndTransactionType(itemType, buyOrderType, sortPriceAsc);
+				List<OrderTransaction> ordersPage = transactionRepository.findOrderByItemTypeAndTransactionType(itemType, buyOrderType, sortPriceDesc);
 				foundBuySellPages.get("foundBuyPages").put(pageIndex.intValue(),  ordersPage);
 			}
 			
@@ -208,7 +240,7 @@ public class TransactionService {
 	}
 	
 	@Transactional
-	public OrderTransaction CancelOrder(UUID transactionID, int ownerId) throws IllegalStateException {
+	public OrderTransaction CancelOrder(UUID transactionID, String ownerId) throws IllegalStateException {
 		// this method processes the player's request to cancel their order
 		
 		// find order we want to cancel
@@ -217,7 +249,7 @@ public class TransactionService {
 		// check it exists and ownerId matches
 		if (optionalTransaction.isPresent()) {
 			OrderTransaction canceledTransaction = optionalTransaction.get();
-			if (canceledTransaction.getOwnerId() == ownerId) {
+			if (canceledTransaction.getOwnerId().equals(ownerId)) {
 				OrderTransaction transactionCopy = new OrderTransaction(canceledTransaction);
 				canceledTransaction.setRemainingQuantity(0);
 				return transactionCopy;
@@ -225,11 +257,11 @@ public class TransactionService {
 				throw new IllegalStateException("You are not authorized to cancel this transaction");
 			}
 		} else {
-			// TODO: remove this because it only exists for debugging purposes.
-			OrderTransaction blankOrder = new OrderTransaction();
-			blankOrder.setItemType(ItemType.Apple);
-			return blankOrder;
-//			throw new IllegalStateException("Transaction you are trying to cancel does not exist");
+			// TODO: remove this because it only exists for debugging purposes and allows us to cancel player orders out of sync with the java database.
+//			OrderTransaction blankOrder = new OrderTransaction();
+//			blankOrder.setItemType(ItemType.Apple);
+//			return blankOrder;
+			throw new IllegalStateException("Transaction you are trying to cancel does not exist");
 		}
 	}
 	

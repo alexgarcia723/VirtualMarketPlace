@@ -30,7 +30,7 @@ public class OrderTransaction extends Transaction {
 		this.transactionId = originalTransaction.transactionId;
 	}
 
-	public OrderTransaction(TransactionType transactionType, ItemType itemType, int originalQuantity, int remainingQuantity, double price, int ownerId, String ownerName) {
+	public OrderTransaction(TransactionType transactionType, ItemType itemType, int originalQuantity, int remainingQuantity, double price, String ownerId, String ownerName) {
 		this.transactionType = transactionType;
 		this.itemType = itemType;
 		this.originalQuantity = originalQuantity;

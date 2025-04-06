@@ -1,4 +1,6 @@
-API Info: 
+Build with: mvn clean package -DskipTests
+
+API Info (unfinished): 
 
 /api/v1/getPages POST
 	Input JSON Format:
