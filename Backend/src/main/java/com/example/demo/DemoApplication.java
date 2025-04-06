@@ -20,8 +20,10 @@ public class DemoApplication {
 	CommandLineRunner runner(TransactionRepository repository) {
 		return args -> {
 			Random randomizer = new Random();
-			double spreadAnchor = randomizer.nextInt(100, 1000)/100.0;
-			double spread = 0.5;
+			double initialSpread = 5.0;
+			double priceCap = 50;
+			double priceFloor = 0.5;
+			double spreadAnchor = randomizer.nextInt(1000, (int) (priceCap * 100))/100.0;
 			HashMap<ItemType, Double> lowestItemPrices = new HashMap<>();
 
 			// add 100 random BuyOrders into OrderTransaction database table
@@ -32,7 +34,7 @@ public class DemoApplication {
 				ItemType randomItemType = ItemType.getRandomItemType();
 				TransactionType fillOrderType = TransactionType.SellOrder;
 				
-				double randomPrice = randomizer.nextDouble(spreadAnchor, 200);
+				double randomPrice = randomizer.nextDouble(spreadAnchor, priceCap);
 				randomPrice = Math.floor(randomPrice * 100) / 100;
 				
 				Double lowestPrice = lowestItemPrices.get(randomItemType);
@@ -52,7 +54,7 @@ public class DemoApplication {
 				TransactionType fillOrderType = TransactionType.BuyOrder;
 				
 				Double lowestPrice = lowestItemPrices.get(randomItemType);
-				double randomPrice = randomizer.nextDouble(lowestPrice + spread, 200);
+				double randomPrice = randomizer.nextDouble(priceFloor, lowestPrice - initialSpread);
 				randomPrice = Math.floor(randomPrice * 100) / 100;
 				
 				String randomOwnerId = String.valueOf(randomizer.nextInt(1, 10000));

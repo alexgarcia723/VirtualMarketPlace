@@ -24,7 +24,7 @@ public class TransactionService {
 	static private final TransactionType buyOrderType = TransactionType.BuyOrder;
 	static private final TransactionType sellOrderType = TransactionType.SellOrder;
 	static private int ordersPerPage = 10;
-	static private double mandatorySpread = 0.5;
+	static private double mandatorySpread = 0.10;
 	
 	private final TransactionRepository transactionRepository;
 
@@ -64,12 +64,12 @@ public class TransactionService {
 		if (!topTransactions.isEmpty()) {
 			OrderTransaction topTransaction = topTransactions.get(0);
 			if (transactionType == TransactionType.BuyOrder) {
-				if (transactionDetails.getPrice() < (topTransaction.getPrice() + mandatorySpread)) {
-					throw new IllegalStateException("Order price must be at least $" + topTransaction.getPrice() + " + " + String.valueOf(mandatorySpread));
+				if (transactionDetails.getPrice() > (topTransaction.getPrice() - mandatorySpread)) {
+					throw new IllegalStateException("Order price cannot be greater than $" + topTransaction.getPrice() + " - " + String.valueOf(topTransaction.getPrice() - mandatorySpread));
 				}
 			} else if (transactionType == TransactionType.SellOrder) {
-				if (transactionDetails.getPrice() > (topTransaction.getPrice() - mandatorySpread)) {
-					throw new IllegalStateException("Order price cannot be greater than $" + topTransaction.getPrice() + " - " + String.valueOf(mandatorySpread));
+				if (transactionDetails.getPrice() < (topTransaction.getPrice() + mandatorySpread)) {
+					throw new IllegalStateException("Order price must be at least $" + topTransaction.getPrice() + " + " + String.valueOf(mandatorySpread));
 				}
 			}
 		}
