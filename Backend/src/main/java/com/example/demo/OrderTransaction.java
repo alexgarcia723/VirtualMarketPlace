@@ -13,7 +13,7 @@ import jakarta.persistence.Table;
  * 	https://www.javaguides.net/2019/08/spring-boot-spring-data-jpa-postgresql-example.html
  */
 @Entity
-@Table(name = "PendingTransactions")
+@Table(name = "OrderTransactions")
 public class OrderTransaction extends Transaction {
 
 	public OrderTransaction() {
@@ -42,7 +42,7 @@ public class OrderTransaction extends Transaction {
 
 	@Override
 	public String toString() {
-		return "PendingTransaction [transactionType=" + transactionType + ", itemType=" + itemType
+		return "OrderTransaction [transactionType=" + transactionType + ", itemType=" + itemType
 				+ ", originalQuantity=" + originalQuantity + ", remainingQuantity=" + remainingQuantity + ", price="
 				+ price + ", ownerId=" + ownerId + ", ownerName=" + ownerName + ", transactionId=" + transactionId
 				+ "]";

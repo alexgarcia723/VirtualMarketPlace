@@ -54,8 +54,6 @@ public class TransactionController {
 	public ResponseEntity<String[]> FillMarketOrder(@RequestBody String jsonBody) {
 		// accepts HTTP requests with JSON describing market order request parameters and returns spent funds amount + success/failure message
 		
-		System.out.println(jsonBody);
-
 		// get our values from the user's JSON and convert them to the correct types to pass to TransactionService
 		HashMap<String, String> orderDetails = gson.fromJson(jsonBody, HashMap.class);
 		int itemTypeIndex =  Integer.valueOf(orderDetails.get("itemType").toString());

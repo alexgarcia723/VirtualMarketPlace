@@ -1,7 +1,6 @@
 package com.example.demo;
 
 import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -16,7 +15,7 @@ import jakarta.persistence.Table;
  */
 
 @Entity
-@Table(name = "CompletedTransactions")
+@Table(name = "FulfillmentTransactions")
 public class FulfillmentTransaction extends Transaction {
 
 	@ManyToOne(cascade = CascadeType.ALL)
@@ -61,7 +60,7 @@ public class FulfillmentTransaction extends Transaction {
 
 	@Override
 	public String toString() {
-		return "CompletedTransaction [otherTransaction=" + otherTransaction + ", transactionType=" + transactionType
+		return "FulfillmentTransaction [otherTransaction=" + otherTransaction + ", transactionType=" + transactionType
 				+ ", itemType=" + itemType + ", originalQuantity=" + originalQuantity + ", remainingQuantity="
 				+ remainingQuantity + ", price=" + price + ", ownerId=" + ownerId + ", ownerName=" + ownerName
 				+ ", transactionId=" + transactionId + "]";

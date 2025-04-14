@@ -65,7 +65,7 @@ public class TransactionService {
 			OrderTransaction topTransaction = topTransactions.get(0);
 			if (transactionType == TransactionType.BuyOrder) {
 				if (transactionDetails.getPrice() > (topTransaction.getPrice() - mandatorySpread)) {
-					throw new IllegalStateException("Order price cannot be greater than $" + topTransaction.getPrice() + " - " + String.valueOf(topTransaction.getPrice() - mandatorySpread));
+					throw new IllegalStateException("Order price cannot be greater than $" + topTransaction.getPrice() + " - " + String.valueOf(mandatorySpread));
 				}
 			} else if (transactionType == TransactionType.SellOrder) {
 				if (transactionDetails.getPrice() < (topTransaction.getPrice() + mandatorySpread)) {
