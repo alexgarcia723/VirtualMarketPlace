@@ -8,6 +8,7 @@ local updateClientPages = remotesFolder:FindFirstChild("UpdateClientPages")
 local updateClientItemOrderHistories = remotesFolder:FindFirstChild("UpdateClientItemOrderHistories")
 SharedUtility = require(ReplicatedStorage.Shared.SharedUtility)
 local serverAddress = "http://localhost:8081"
+
 local endpoints = {
     placeOrder = "/api/v1/placeOrder",
     fillLimitOrder = "/api/v1/fillLimitOrder",
@@ -25,7 +26,6 @@ Utility.OrdersPerPage = 10 -- how many orders are in each page returned from the
 Utility.CacheEntryAgeLimit = 60 -- delete any cache entry older than 1 min
 Utility.RequestQueue = {}
 Utility.PlayerResponseQueue = {}
--- TODO: wrap every call to HttpService:RequestAsync into its own method that automaticlaly updates playerData.orderProcessing
 
 function Utility.UpdateViewingPages(player, itemType, buyPageIndex, sellPageIndex, beingViewed)
     local userId = player.UserId
@@ -113,6 +113,7 @@ function Utility.UpdatePageSend()
     })
 end
 
+
 function Utility.UpdatePageReceive(responseInfo)
     local updatedPages = responseInfo.responseData
 
@@ -148,9 +149,14 @@ function Utility.UpdatePageReceive(responseInfo)
         local itemName = SharedUtility.ItemTypeLookup[itemType]
         local buyPageIndex = Utility.PlayerViewingPages[player.userId].buyPageIndex
         local sellPageIndex = Utility.PlayerViewingPages[player.userId].sellPageIndex
-        local buyPage = Utility.PageCache[itemName].buyPages[buyPageIndex]
-        local sellPage = Utility.PageCache[itemName].sellPages[sellPageIndex]
-        updateClientPages:FireClient(player, itemType, buyPageIndex, sellPageIndex, {buyPage, sellPage})
+        local itemCachePages = Utility.PageCache[itemName]
+        if itemCachePages then
+            local buyPage = Utility.PageCache[itemName].buyPages[buyPageIndex]
+            local sellPage = Utility.PageCache[itemName].sellPages[sellPageIndex]
+            updateClientPages:FireClient(player, itemType, buyPageIndex, sellPageIndex, {buyPage, sellPage})
+        else
+            print("!!!! UpdatePageReceive missing itemCachePages !!!!")
+        end
     end
 end
 
@@ -234,11 +240,16 @@ function Utility.UpdateOrderStatusReceive(responseInfo)
             end
 
             local itemName = updatedTransaction.itemType
+            local transactionName = updatedTransaction.transactionType
             if updatedTransaction.remainingQuantity == 0 then
                 -- transaction has been fulfilled and must be deleted
                 Utility.RemovePlayerOrder(userId, updatedTransaction.transactionId)
             else
+                print(Utility.GlobalPlayerDataTable[userId].pendingPlayerOrders[updatedTransaction.transactionId].transactionType)
                 updatedTransaction.itemType = SharedUtility.ItemType[itemName]
+                print(updatedTransaction.transactionType)
+                updatedTransaction.transactionType = SharedUtility.TransactionType[transactionName]
+                print(updatedTransaction.transactionType)
                 Utility.GlobalPlayerDataTable[userId].pendingPlayerOrders[updatedTransaction.transactionId] = updatedTransaction
             end
             

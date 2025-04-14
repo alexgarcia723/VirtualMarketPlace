@@ -77,4 +77,15 @@ function SharedUtility.DeepCopy(original)
 	return copy
 end
 
+function SharedUtility.PrintTable(test) 
+    for key, value in pairs(test) do
+        if type(test[key]) == "table" then
+            SharedUtility.PrintTable(test[key])
+        else
+            print(key, value)
+        end
+    end
+end
+
+
 return SharedUtility

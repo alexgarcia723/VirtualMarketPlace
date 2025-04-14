@@ -7,7 +7,7 @@ local MarketplaceTempalateUI = StarterGui:FindFirstChild("MarketplaceUI")
 local TopbarTemplateUI = StarterGui:FindFirstChild("TopbarUI")
 local InventoryUI = StarterGui:FindFirstChild("InventoryUI")
 
-local DataStoreName = "M93sjmcNt1X6"
+local DataStoreName = "M93sjmcNt1X16"
 -- local DataStoreName = tostring(Random.new():NextInteger(1, 999999))
 local playerDataStore = DataStoreService:GetDataStore(DataStoreName)
 local getOptions = Instance.new("DataStoreGetOptions")

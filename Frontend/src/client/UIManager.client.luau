@@ -114,7 +114,7 @@ local function WipeOrderLine(orderLine)
 end
 
 local function GetTimeDisplay(currentTimeUnixMilliseconds, otherTimeUnixMilliseconds)
-    local timediffSeconds= currentTimeUnixMilliseconds.UnixTimestamp - otherTimeUnixMilliseconds.UnixTimestamp
+    local timediffSeconds = math.abs(currentTimeUnixMilliseconds.UnixTimestamp - otherTimeUnixMilliseconds.UnixTimestamp)
     local timeDiffObj = DateTime.fromUnixTimestamp(timediffSeconds):ToUniversalTime()
     local timeDiffMins = timeDiffObj.Minute
 
@@ -488,8 +488,10 @@ local function UpdateOrderUI(data)
 
         if transaction.transactionType == SharedUtility.TransactionType.BuyOrder then
             orderLine.TypeFrame.BuyLabel.Visible = true
+            orderLine.TypeFrame.SellLabel.Visible = false
         else
             orderLine.TypeFrame.SellLabel.Visible = true
+            orderLine.TypeFrame.BuyLabel.Visible = false
         end
 
         orderLine.Visible = true
